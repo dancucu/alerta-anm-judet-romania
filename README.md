@@ -74,11 +74,30 @@ După configurare, verifică că toți senzorii s-au creat:
 - **Settings** → **Devices & Services** → **Entities**
 - Caută "Alertă ANM" sau "mesaj_meteo"
 
+## Automatizări și Card Lovelace
+
+### Exemple Gata de Folosit
+
+În directorul [`examples/`](examples/) găsești fișiere gata configurate:
+
+1. **[automation_notificare_inceput_avertizare.yaml](examples/automation_notificare_inceput_avertizare.yaml)** - Notificări când apar alerte meteo noi
+2. **[automation_notificare_sfarsit_avertizare.yaml](examples/automation_notificare_sfarsit_avertizare.yaml)** - Notificări când alertele se termină
+3. **[lovelace_card.yaml](examples/lovelace_card.yaml)** - Card Lovelace complet configurat
+
+**Instalare Automații:**
+1. Copiază conținutul fișierelor din `examples/` în Home Assistant
+2. Mergi la **Settings** → **Automations & Scenes** → **+ Create Automation** → **3 dots** → **Edit in YAML**
+3. Lipește conținutul și salvează
+
+**Instalare Card Lovelace:**
+1. Deschide dashboard-ul → **Edit Dashboard**
+2. Adaugă **Manual Card** și lipește conținutul din `lovelace_card.yaml`
+
 ## Utilizare
 
 ### Monitorizare în Lovelace
 
-Adaugă cartă YAML cu template Lovelace:
+Card YAML complet (sau vezi [`examples/lovelace_card.yaml`](examples/lovelace_card.yaml)):
 
 ```yaml
 type: custom:fold-entity-row
@@ -279,15 +298,21 @@ cd alerta-anm-judet-romania
 
 ### Structura Proiect
 ```
-alerta_anm_judet_romania/
-├── __init__.py           # Setup integrare
-├── config_flow.py        # Configurare UI
-├── const.py              # Constante (județe, URL-uri)
-├── sensor.py             # Definiția senzorilor
-├── check_map.py          # Script detecție culoare hartă
-├── manifest.json         # Metadate integrare
-├── lovelace_card.yaml    # Template card Lovelace
-└── README.md             # Acest fișier
+alerta-anm-judet-romania/
+├── custom_components/
+│   └── alerta_anm_judet_romania/
+│       ├── __init__.py           # Setup integrare
+│       ├── config_flow.py        # Configurare UI
+│       ├── const.py              # Constante (județe, URL-uri)
+│       ├── sensor.py             # Definiția senzorilor
+│       ├── check_map.py          # Script detecție culoare hartă
+│       └── manifest.json         # Metadate integrare
+├── examples/
+│   ├── automation_notificare_inceput_avertizare.yaml
+│   ├── automation_notificare_sfarsit_avertizare.yaml
+│   └── lovelace_card.yaml        # Template card Lovelace
+├── hacs.json                     # Configurare HACS
+└── README.md                     # Acest fișier
 ```
 
 ### Județe Suportate
