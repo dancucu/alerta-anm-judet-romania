@@ -74,7 +74,7 @@ După configurare, verifică că toți senzorii s-au creat:
 - **Settings** → **Devices & Services** → **Entities**
 - Caută "Alertă ANM" sau "mesaj_meteo"
 
-**⏱️ Notă importantă:** API-ul ANM poate dura 30-60 secunde să răspundă la pornire. Senzorul mesaj meteo va afișa "Se încarcă datele meteo..." până când datele sunt preluate cu succes.
+**⏱️ Notă importantă:** API-ul ANM poate dura între 1-60 minute să răspundă la pornire sau după restart Home Assistant. Senzorul mesaj meteo va afișa "Se încarcă datele meteo..." până când datele sunt preluate cu succes. Acest lucru este normal și depinde de disponibilitatea serverelor ANM.
 
 ## Automatizări și Card Lovelace
 
@@ -276,7 +276,7 @@ Pentru a adăuga o notificare suplimentară (ex: Telegram):
 ### "Senzori nu se actualizează"
 - Verifică intervalul de actualizare (minim 5 minute)
 - Controlează conexiunea la internet și website-ul ANM
-- API-ul ANM poate fi lent - așteaptă până la 60 secunde pentru primul răspuns
+- API-ul ANM poate fi lent - așteaptă până la 60 minute pentru primul răspuns după pornire/restart
 
 ### "Card Lovelace arată gol"
 - Instalează `custom:button-card` și `custom:fold-entity-row` prin HACS
