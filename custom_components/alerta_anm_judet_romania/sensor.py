@@ -35,9 +35,9 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
         _LOGGER.debug("Se execută actualizarea senzorilor la intervalul setat.")
         await alert_sensor.async_update()
         await id_sensor.async_update()
+        await message_sensor.async_update()
         await map_sensor.async_update()
         await color_sensor.async_update()
-        # Message sensor se actualizează automat când alert_sensor se schimbă
 
     # Programarea actualizării la intervalele setate
     async_track_time_interval(hass, update_sensors, update_interval)
