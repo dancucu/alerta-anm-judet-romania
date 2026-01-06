@@ -121,73 +121,23 @@ actions:
     target:
       entity_id: sensor.anm_avertizare_id
 
-  # Extrage informații din senzor
-  - variables:
-      mesaj_entity_id: "{{ trigger.entity_id }}"
-      cod_judet: "{{ trigger.entity_id.replace('sensor.mesaj_meteo_', '') }}"
-      mesaj_complet: "{{ state_attr(trigger.entity_id, 'mesaj_complet') | default('') }}"
-      culoare_entity: "sensor.culoare_harta_{{ cod_judet }}"
-      culoare_status: "{{ states('sensor.culoare_harta_' + cod_judet) | default('necunoscut') }}"
-      judet_map:
-        alba: "Alba"
-        arad: "Arad"
-        arges: "Argeș"
-        bacau: "Bacău"
-        bihor: "Bihor"
-        bistrita_nasaud: "Bistrița-Năsăud"
-        botosani: "Botoșani"
-        braila: "Brăila"
-        brasov: "Brașov"
-        bucuresti: "București"
-        buzau: "Buzău"
-        calarasi: "Călărași"
-        caras_severin: "Caraș-Severin"
-        cluj: "Cluj"
-        constanta: "Constanța"
-        covasna: "Covasna"
-        dambovita: "Dâmbovița"
-        dolj: "Dolj"
-        galati: "Galați"
-        giurgiu: "Giurgiu"
-        gorj: "Gorj"
-        harghita: "Harghita"
-        hunedoara: "Hunedoara"
-        ialomita: "Ialomița"
-        iasi: "Iași"
-        ilfov: "Ilfov"
-        maramures: "Maramureș"
-        mehedinti: "Mehedinți"
-        mures: "Mureș"
-        neamt: "Neamț"
-        olt: "Olt"
-        prahova: "Prahova"
-        salaj: "Sălaj"
-        satu_mare: "Satu Mare"
-        sibiu: "Sibiu"
-        suceava: "Suceava"
-        teleorman: "Teleorman"
-        timis: "Timiș"
-        tulcea: "Tulcea"
-        valcea: "Vâlcea"
-        vaslui: "Vaslui"
-        vrancea: "Vrancea"
-      judet_name: "{{ judet_map.get(cod_judet, cod_judet | title) }}"
-
   # Notificare iPhone
   - action: notify.mobile_app_iphone
     data:
       title: >
+        {%- set cod_judet = trigger.entity_id.replace('sensor.mesaj_meteo_', '') -%}
+        {%- set mesaj_complet = state_attr(trigger.entity_id, 'mesaj_complet') | default('') -%}
         {% if 'rosu' in mesaj_complet | lower or 'roșu' in mesaj_complet | lower %}
-          🚨 COD ROȘU {{ judet_name | upper }}
+          🚨 COD ROȘU {{ cod_judet | upper }}
         {% elif 'portocaliu' in mesaj_complet | lower %}
-          🟠 COD PORTOCALIU {{ judet_name | upper }}
+          🟠 COD PORTOCALIU {{ cod_judet | upper }}
         {% elif 'galben' in mesaj_complet | lower %}
-          ⚠️ COD GALBEN {{ judet_name | upper }}
+          ⚠️ COD GALBEN {{ cod_judet | upper }}
         {% else %}
-          ℹ️ Informare Meteo {{ judet_name }}
+          ℹ️ Informare Meteo {{ cod_judet | upper }}
         {% endif %}
       message: >
-        {% set text = mesaj_complet | lower %}
+        {%- set mesaj_complet = state_attr(trigger.entity_id, 'mesaj_complet') | default('') -%}
         
         {% set split_interval = mesaj_complet.split('Interval de valabilitate:') %}
         {% if split_interval | length > 1 %}
@@ -217,6 +167,7 @@ actions:
         push:
           sound:
             name: >
+              {%- set mesaj_complet = state_attr(trigger.entity_id, 'mesaj_complet') | default('') -%}
               {% if 'rosu' in mesaj_complet | lower or 'roșu' in mesaj_complet | lower or 'portocaliu' in mesaj_complet | lower %}
                 critical
               {% else %}
@@ -228,16 +179,20 @@ actions:
   - action: notify.html5
     data:
       title: >
+        {%- set cod_judet = trigger.entity_id.replace('sensor.mesaj_meteo_', '') -%}
+        {%- set mesaj_complet = state_attr(trigger.entity_id, 'mesaj_complet') | default('') -%}
         {% if 'rosu' in mesaj_complet | lower or 'roșu' in mesaj_complet | lower %}
-          🚨 COD ROȘU {{ judet_name | upper }}
+          🚨 COD ROȘU {{ cod_judet | upper }}
         {% elif 'portocaliu' in mesaj_complet | lower %}
-          🟠 COD PORTOCALIU {{ judet_name | upper }}
+          🟠 COD PORTOCALIU {{ cod_judet | upper }}
         {% elif 'galben' in mesaj_complet | lower %}
-          ⚠️ COD GALBEN {{ judet_name | upper }}
+          ⚠️ COD GALBEN {{ cod_judet | upper }}
         {% else %}
-          ℹ️ Informare Meteo {{ judet_name }}
+          ℹ️ Informare Meteo {{ cod_judet | upper }}
         {% endif %}
       message: >
+        {%- set mesaj_complet = state_attr(trigger.entity_id, 'mesaj_complet') | default('') -%}
+        
         {% set split_interval = mesaj_complet.split('Interval de valabilitate:') %}
         {% if split_interval | length > 1 %}
           {% set interval = split_interval[1].split('Fenomene')[0] | trim %}
@@ -262,7 +217,7 @@ actions:
 
         💨 Fenomene vizate:{{ fenomene_final }}
       data:
-        tag: "alerta-meteo-{{ cod_judet }}"
+        tag: "alerta-meteo-{{ trigger.entity_id.replace('sensor.mesaj_meteo_', '') }}"
         url: /dashboard-acasa/0
 
 mode: parallel

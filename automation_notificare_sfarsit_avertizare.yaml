@@ -141,62 +141,13 @@ conditions:
       {{ states('sensor.avertizari_meteo_anm') not in ['unavailable', 'unknown',
       'None'] }}
 actions:
-  # Extrage informații din senzor
-  - variables:
-      mesaj_entity_id: "{{ trigger.entity_id }}"
-      cod_judet: "{{ trigger.entity_id.replace('sensor.mesaj_meteo_', '') }}"
-      judet_map:
-        alba: "Alba"
-        arad: "Arad"
-        arges: "Argeș"
-        bacau: "Bacău"
-        bihor: "Bihor"
-        bistrita_nasaud: "Bistrița-Năsăud"
-        botosani: "Botoșani"
-        braila: "Brăila"
-        brasov: "Brașov"
-        bucuresti: "București"
-        buzau: "Buzău"
-        calarasi: "Călărași"
-        caras_severin: "Caraș-Severin"
-        cluj: "Cluj"
-        constanta: "Constanța"
-        covasna: "Covasna"
-        dambovita: "Dâmbovița"
-        dolj: "Dolj"
-        galati: "Galați"
-        giurgiu: "Giurgiu"
-        gorj: "Gorj"
-        harghita: "Harghita"
-        hunedoara: "Hunedoara"
-        ialomita: "Ialomița"
-        iasi: "Iași"
-        ilfov: "Ilfov"
-        maramures: "Maramureș"
-        mehedinti: "Mehedinți"
-        mures: "Mureș"
-        neamt: "Neamț"
-        olt: "Olt"
-        prahova: "Prahova"
-        salaj: "Sălaj"
-        satu_mare: "Satu Mare"
-        sibiu: "Sibiu"
-        suceava: "Suceava"
-        teleorman: "Teleorman"
-        timis: "Timiș"
-        tulcea: "Tulcea"
-        valcea: "Vâlcea"
-        vaslui: "Vaslui"
-        vrancea: "Vrancea"
-      judet_name: "{{ judet_map.get(cod_judet, cod_judet | title) }}"
-
   # Notificare iPhone
   - action: notify.mobile_app_iphone
     data:
       title: ✅ Alertă Meteo Finalizată
       message: >
-        Nu mai sunt avertizări meteo active în {{ judet_name }}.
-        Vremea s-a liniștit. ☀️
+        {%- set cod_judet = trigger.entity_id.replace('sensor.mesaj_meteo_', '') -%}
+        Nu mai sunt avertizări meteo active. Vremea s-a liniștit. ☀️
       data:
         url: /dashboard-acasa/0
         push:
@@ -207,11 +158,11 @@ actions:
     data:
       title: ✅ Alertă Meteo Finalizată
       message: >
-        Nu mai sunt avertizări meteo active în {{ judet_name }}.
-        Vremea s-a liniștit. ☀️
+        {%- set cod_judet = trigger.entity_id.replace('sensor.mesaj_meteo_', '') -%}
+        Nu mai sunt avertizări meteo active. Vremea s-a liniștit. ☀️
       data:
         url: /dashboard-acasa/0
-        tag: "alerta-meteo-{{ cod_judet }}"
+        tag: "alerta-meteo-{{ trigger.entity_id.replace('sensor.mesaj_meteo_', '') }}"
 
 mode: parallel
 max: 43
