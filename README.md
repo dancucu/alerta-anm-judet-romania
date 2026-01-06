@@ -35,19 +35,24 @@ Integrare Home Assistant pentru alertele meteorologice ANM (Administrația Nați
 
 ### Metoda 2: Instalare Manuală
 
-1. Accesează directorul `custom_components` din Home Assistant:
+1. Copiază directorul `custom_components/alerta_anm_judet_romania` din acest repository în directorul `custom_components` din Home Assistant:
    ```bash
-   cd /root/homeassistant/custom_components
+   # Navighează la Home Assistant
+   cd /root/homeassistant/
    # sau pe sistem standard
-   cd ~/.homeassistant/custom_components
+   cd ~/.homeassistant/
+   
+   # Clonează repository-ul temporar
+   git clone https://github.com/dancucu/alerta-anm-judet-romania.git temp_alerta
+   
+   # Copiază integrarea
+   cp -r temp_alerta/custom_components/alerta_anm_judet_romania custom_components/
+   
+   # Șterge fișierele temporare
+   rm -rf temp_alerta
    ```
 
-2. Clonează repository-ul:
-   ```bash
-   git clone https://github.com/dancucu/alerta-anm-judet-romania.git alerta_anm_judet_romania
-   ```
-
-3. Restart Home Assistant
+2. Restart Home Assistant
 
 ## Configurare
 
