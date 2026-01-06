@@ -1,0 +1,265 @@
+alias: Notificare Meteo Detaliată ANM
+description: >-
+  Trimite notificări pentru alerte meteo ANM cu Interval și Fenomene.
+  Funcționează cu orice județ selectat. Verifică validitatea senzorului sursă.
+triggers:
+  - trigger: state
+    entity_id: sensor.mesaj_meteo_alba
+  - trigger: state
+    entity_id: sensor.mesaj_meteo_arad
+  - trigger: state
+    entity_id: sensor.mesaj_meteo_arges
+  - trigger: state
+    entity_id: sensor.mesaj_meteo_bacau
+  - trigger: state
+    entity_id: sensor.mesaj_meteo_bihor
+  - trigger: state
+    entity_id: sensor.mesaj_meteo_bistrita_nasaud
+  - trigger: state
+    entity_id: sensor.mesaj_meteo_botosani
+  - trigger: state
+    entity_id: sensor.mesaj_meteo_braila
+  - trigger: state
+    entity_id: sensor.mesaj_meteo_brasov
+  - trigger: state
+    entity_id: sensor.mesaj_meteo_bucuresti
+  - trigger: state
+    entity_id: sensor.mesaj_meteo_buzau
+  - trigger: state
+    entity_id: sensor.mesaj_meteo_calarasi
+  - trigger: state
+    entity_id: sensor.mesaj_meteo_caras_severin
+  - trigger: state
+    entity_id: sensor.mesaj_meteo_cluj
+  - trigger: state
+    entity_id: sensor.mesaj_meteo_constanta
+  - trigger: state
+    entity_id: sensor.mesaj_meteo_covasna
+  - trigger: state
+    entity_id: sensor.mesaj_meteo_dambovita
+  - trigger: state
+    entity_id: sensor.mesaj_meteo_dolj
+  - trigger: state
+    entity_id: sensor.mesaj_meteo_galati
+  - trigger: state
+    entity_id: sensor.mesaj_meteo_giurgiu
+  - trigger: state
+    entity_id: sensor.mesaj_meteo_gorj
+  - trigger: state
+    entity_id: sensor.mesaj_meteo_harghita
+  - trigger: state
+    entity_id: sensor.mesaj_meteo_hunedoara
+  - trigger: state
+    entity_id: sensor.mesaj_meteo_ialomita
+  - trigger: state
+    entity_id: sensor.mesaj_meteo_iasi
+  - trigger: state
+    entity_id: sensor.mesaj_meteo_ilfov
+  - trigger: state
+    entity_id: sensor.mesaj_meteo_maramures
+  - trigger: state
+    entity_id: sensor.mesaj_meteo_mehedinti
+  - trigger: state
+    entity_id: sensor.mesaj_meteo_mures
+  - trigger: state
+    entity_id: sensor.mesaj_meteo_neamt
+  - trigger: state
+    entity_id: sensor.mesaj_meteo_olt
+  - trigger: state
+    entity_id: sensor.mesaj_meteo_prahova
+  - trigger: state
+    entity_id: sensor.mesaj_meteo_salaj
+  - trigger: state
+    entity_id: sensor.mesaj_meteo_satu_mare
+  - trigger: state
+    entity_id: sensor.mesaj_meteo_sibiu
+  - trigger: state
+    entity_id: sensor.mesaj_meteo_suceava
+  - trigger: state
+    entity_id: sensor.mesaj_meteo_teleorman
+  - trigger: state
+    entity_id: sensor.mesaj_meteo_timis
+  - trigger: state
+    entity_id: sensor.mesaj_meteo_tulcea
+  - trigger: state
+    entity_id: sensor.mesaj_meteo_valcea
+  - trigger: state
+    entity_id: sensor.mesaj_meteo_vaslui
+  - trigger: state
+    entity_id: sensor.mesaj_meteo_vrancea
+conditions:
+  - condition: state
+    state: alerta
+    entity_id: "{{ trigger.entity_id }}"
+  - condition: template
+    value_template: >
+      {{ states('sensor.avertizari_meteo_anm') not in ['unavailable', 'unknown',
+      'None'] }}
+  - condition: template
+    value_template: |-
+      {% if trigger.from_state is not none %}
+        {% set old_state = trigger.from_state.state %}
+        {% set old_msg = trigger.from_state.attributes.mesaj_complet | default('') %}
+        {% set new_msg = trigger.to_state.attributes.mesaj_complet | default('') %}
+        
+        {% if old_state in ['unavailable', 'unknown'] %}
+          false
+        {% else %}
+          {{ old_state != 'alerta' or old_msg != new_msg }}
+        {% endif %}
+      {% else %}
+        false
+      {% endif %}
+    enabled: true
+actions:
+  # Actualizează senzorul de ID-uri pentru a fi sigur că avem hărțile curente
+  - action: homeassistant.update_entity
+    target:
+      entity_id: sensor.anm_avertizare_id
+
+  # Extrage informații din senzor
+  - variables:
+      mesaj_entity_id: "{{ trigger.entity_id }}"
+      cod_judet: "{{ trigger.entity_id.replace('sensor.mesaj_meteo_', '') }}"
+      mesaj_complet: "{{ state_attr(trigger.entity_id, 'mesaj_complet') | default('') }}"
+      culoare_entity: "sensor.culoare_harta_{{ cod_judet }}"
+      culoare_status: "{{ states('sensor.culoare_harta_' + cod_judet) | default('necunoscut') }}"
+      judet_map:
+        alba: "Alba"
+        arad: "Arad"
+        arges: "Argeș"
+        bacau: "Bacău"
+        bihor: "Bihor"
+        bistrita_nasaud: "Bistrița-Năsăud"
+        botosani: "Botoșani"
+        braila: "Brăila"
+        brasov: "Brașov"
+        bucuresti: "București"
+        buzau: "Buzău"
+        calarasi: "Călărași"
+        caras_severin: "Caraș-Severin"
+        cluj: "Cluj"
+        constanta: "Constanța"
+        covasna: "Covasna"
+        dambovita: "Dâmbovița"
+        dolj: "Dolj"
+        galati: "Galați"
+        giurgiu: "Giurgiu"
+        gorj: "Gorj"
+        harghita: "Harghita"
+        hunedoara: "Hunedoara"
+        ialomita: "Ialomița"
+        iasi: "Iași"
+        ilfov: "Ilfov"
+        maramures: "Maramureș"
+        mehedinti: "Mehedinți"
+        mures: "Mureș"
+        neamt: "Neamț"
+        olt: "Olt"
+        prahova: "Prahova"
+        salaj: "Sălaj"
+        satu_mare: "Satu Mare"
+        sibiu: "Sibiu"
+        suceava: "Suceava"
+        teleorman: "Teleorman"
+        timis: "Timiș"
+        tulcea: "Tulcea"
+        valcea: "Vâlcea"
+        vaslui: "Vaslui"
+        vrancea: "Vrancea"
+      judet_name: "{{ judet_map.get(cod_judet, cod_judet | title) }}"
+
+  # Notificare iPhone
+  - action: notify.mobile_app_iphone
+    data:
+      title: >
+        {% if 'rosu' in mesaj_complet | lower or 'roșu' in mesaj_complet | lower %}
+          🚨 COD ROȘU {{ judet_name | upper }}
+        {% elif 'portocaliu' in mesaj_complet | lower %}
+          🟠 COD PORTOCALIU {{ judet_name | upper }}
+        {% elif 'galben' in mesaj_complet | lower %}
+          ⚠️ COD GALBEN {{ judet_name | upper }}
+        {% else %}
+          ℹ️ Informare Meteo {{ judet_name }}
+        {% endif %}
+      message: >
+        {% set text = mesaj_complet | lower %}
+        
+        {% set split_interval = mesaj_complet.split('Interval de valabilitate:') %}
+        {% if split_interval | length > 1 %}
+          {% set interval = split_interval[1].split('Fenomene')[0] | trim %}
+        {% else %}
+          {% set interval = "Vezi aplicația" %}
+        {% endif %}
+
+        {% set split_fenomene = mesaj_complet.split('Fenomene') %}
+        {% if split_fenomene | length > 1 %}
+          {% set raw_fen = split_fenomene[1].split('Zone')[0] | replace('vizate:', '') | replace('și zone vizate:', '') | trim %}
+          {% set lista = raw_fen.split(',') %}
+          {% set fenomene_formatat = namespace(out='') %}
+          {% for item in lista %}
+            {% set fenomene_formatat.out = fenomene_formatat.out + '\n- ' + item | trim %}
+          {% endfor %}
+          {% set fenomene_final = fenomene_formatat.out %}
+        {% else %}
+          {% set fenomene_final = " Vezi aplicația" %}
+        {% endif %}
+
+        🕒{{ interval }}
+
+        💨 Fenomene vizate:{{ fenomene_final }}
+      data:
+        url: /dashboard-acasa/0
+        push:
+          sound:
+            name: >
+              {% if 'rosu' in mesaj_complet | lower or 'roșu' in mesaj_complet | lower or 'portocaliu' in mesaj_complet | lower %}
+                critical
+              {% else %}
+                default
+              {% endif %}
+            volume: 1
+
+  # Notificare HTML5 (browser desktop)
+  - action: notify.html5
+    data:
+      title: >
+        {% if 'rosu' in mesaj_complet | lower or 'roșu' in mesaj_complet | lower %}
+          🚨 COD ROȘU {{ judet_name | upper }}
+        {% elif 'portocaliu' in mesaj_complet | lower %}
+          🟠 COD PORTOCALIU {{ judet_name | upper }}
+        {% elif 'galben' in mesaj_complet | lower %}
+          ⚠️ COD GALBEN {{ judet_name | upper }}
+        {% else %}
+          ℹ️ Informare Meteo {{ judet_name }}
+        {% endif %}
+      message: >
+        {% set split_interval = mesaj_complet.split('Interval de valabilitate:') %}
+        {% if split_interval | length > 1 %}
+          {% set interval = split_interval[1].split('Fenomene')[0] | trim %}
+        {% else %}
+          {% set interval = "Vezi aplicația" %}
+        {% endif %}
+
+        {% set split_fenomene = mesaj_complet.split('Fenomene') %}
+        {% if split_fenomene | length > 1 %}
+          {% set raw_fen = split_fenomene[1].split('Zone')[0] | replace('vizate:', '') | replace('și zone vizate:', '') | trim %}
+          {% set lista = raw_fen.split(',') %}
+          {% set fenomene_formatat = namespace(out='') %}
+          {% for item in lista %}
+            {% set fenomene_formatat.out = fenomene_formatat.out + '\n- ' + item | trim %}
+          {% endfor %}
+          {% set fenomene_final = fenomene_formatat.out %}
+        {% else %}
+          {% set fenomene_final = " Vezi aplicația" %}
+        {% endif %}
+
+        🕒{{ interval }}
+
+        💨 Fenomene vizate:{{ fenomene_final }}
+      data:
+        tag: "alerta-meteo-{{ cod_judet }}"
+        url: /dashboard-acasa/0
+
+mode: parallel
+max: 43
