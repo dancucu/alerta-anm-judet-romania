@@ -106,75 +106,15 @@ După configurare, verifică că toți senzorii s-au creat:
 
 ### Monitorizare în Lovelace
 
-Card YAML complet (sau vezi [`examples/lovelace_card.yaml`](examples/lovelace_card.yaml)):
+**📋 Card Lovelace complet** se găsește în [`examples/lovelace_card.yaml`](examples/lovelace_card.yaml)
 
-```yaml
-type: custom:fold-entity-row
-padding: 0
-clickable: true
-head:
-  type: custom:button-card
-  entity: sensor.avertizari_meteo_anm
-  name: AVERTIZARE METEO
-  icon: mdi:alert
-  show_name: true
-  show_icon: true
-  show_state: false
-  tap_action:
-    action: none
-  styles:
-    card:
-      - background-color: transparent
-      - box-shadow: none
-      - padding: 0px
-      - margin: 0px
-      - pointer-events: none
-    icon:
-      - width: 22px
-      - height: 22px
-      - color: |
-          [[[
-            const colorSensors = Object.keys(states).filter(key =>
-              key.startsWith('sensor.culoare_harta_') && states[key] && states[key].state !== 'unavailable'
-            );
-            const colorEntityId = colorSensors.length > 0 ? colorSensors[0] : null;
-            let status = colorEntityId ? states[colorEntityId].state : 'portocaliu';
-            
-            const colorMap = {
-              'galben': '#f1c40f',
-              'portocaliu': '#e67e22',
-              'rosu': '#e74c3c',
-              'informare': '#3498db',
-              'verde': '#27ae60'
-            };
-            return colorMap[status] || '#f39c12';
-          ]]]
-    name:
-      - font-weight: 900
-      - font-size: 16px
-      - text-transform: uppercase
-      - color: |
-          [[[
-            const colorSensors = Object.keys(states).filter(key =>
-              key.startsWith('sensor.culoare_harta_') && states[key] && states[key].state !== 'unavailable'
-            );
-            const colorEntityId = colorSensors.length > 0 ? colorSensors[0] : null;
-            let status = colorEntityId ? states[colorEntityId].state : 'portocaliu';
-            
-            const colorMap = {
-              'galben': '#f1c40f',
-              'portocaliu': '#e67e22',
-              'rosu': '#e74c3c',
-              'informare': '#3498db',
-              'verde': '#27ae60'
-            };
-            return colorMap[status] || '#f39c12';
-          ]]]
-entities:
-  - type: custom:button-card
-    entity: sensor.mesaj_meteo_galati
-    # ... (vezi fișierul lovelace_card.yaml pentru template complet)
-```
+Acest card oferă:
+- ✅ Titlu colorat dinamic pe baza gravității alertei (galben/portocaliu/roșu)
+- ✅ Mesaje formatate cu COD-uri evidențiate
+- ✅ Hărți SVG interactive
+- ✅ Detectare automată a senzorilor
+
+**Pentru instalare:** Vezi instrucțiuni detaliate în [`examples/README.md`](examples/README.md)
 
 ### Automatizări Incluse
 
