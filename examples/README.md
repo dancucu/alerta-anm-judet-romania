@@ -64,11 +64,16 @@ Trebuie instalate aceste custom cards prin HACS:
 **Cum se instalează:**
 1. Instalează dependințele din HACS (vezi mai sus)
 2. Copiază tot conținutul fișierului `lovelace_card.yaml`
-3. Deschide dashboard-ul în Home Assistant
-4. Click **Edit Dashboard** (butonul ✏️ din colțul dreapta-sus)
-5. Click **+ Add Card** → derulează până jos → **Manual**
-6. Lipește conținutul copiat
-7. Click **Save**
+3. **IMPORTANT:** Cardul folosește detectare automată și va afișa primul senzor `sensor.mesaj_meteo_*` găsit (de obicei Alba). Pentru județul tău specific, **trebuie să modifici manual** linia 64-69 în fișierul YAML copiat:
+   ```yaml
+   # MODIFICĂ AICI - înlocuiește cu județul tău
+   entity: sensor.mesaj_meteo_galati  # Schimbă "galati" cu județul tău
+   ```
+4. Deschide dashboard-ul în Home Assistant
+5. Click **Edit Dashboard** (butonul ✏️ din colțul dreapta-sus)
+6. Click **+ Add Card** → derulează până jos → **Manual**
+7. Lipește conținutul copiat (după ce l-ai modificat la pasul 3)
+8. Click **Save**
 
 ---
 
