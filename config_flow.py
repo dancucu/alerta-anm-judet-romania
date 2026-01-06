@@ -1,7 +1,8 @@
 """Config flow pentru Alertă ANM Județ."""
-import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.core import callback
+import homeassistant.helpers.config_validation as cv
+import voluptuous as vol
 
 from .const import DOMAIN, JUDETE, DEFAULT_SCAN_INTERVAL
 
