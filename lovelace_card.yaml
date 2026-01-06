@@ -186,23 +186,8 @@ entities:
         // --- PARTEA 2: HĂRȚILE ACTIVE ---
         let harti_gasite = 0;
 
-        // Determinăm numele județului
-        let numeJudet = 'Județul Selectat';
-        if (mesajEntityId && mesajEntityId.includes('mesaj_meteo_')) {
-          const codJudet = mesajEntityId.replace('sensor.mesaj_meteo_', '');
-          const judetMap = {
-            'alba': 'Alba', 'arad': 'Arad', 'arges': 'Argeș', 'bacau': 'Bacău', 'bihor': 'Bihor',
-            'bistrita_nasaud': 'Bistrița-Năsăud', 'botosani': 'Botoșani', 'braila': 'Brăila', 'brasov': 'Brașov',
-            'bucuresti': 'București', 'buzau': 'Buzău', 'calarasi': 'Călărași', 'caras_severin': 'Caraș-Severin',
-            'cluj': 'Cluj', 'constanta': 'Constanța', 'covasna': 'Covasna', 'dambovita': 'Dâmbovița', 'dolj': 'Dolj',
-            'galati': 'Galați', 'giurgiu': 'Giurgiu', 'gorj': 'Gorj', 'harghita': 'Harghita', 'hunedoara': 'Hunedoara',
-            'ialomita': 'Ialomița', 'iasi': 'Iași', 'ilfov': 'Ilfov', 'maramures': 'Maramureș', 'mehedinti': 'Mehedinți',
-            'mures': 'Mureș', 'neamt': 'Neamț', 'olt': 'Olt', 'prahova': 'Prahova', 'salaj': 'Sălaj',
-            'satu_mare': 'Satu Mare', 'sibiu': 'Sibiu', 'suceava': 'Suceava', 'teleorman': 'Teleorman', 'timis': 'Timiș',
-            'tulcea': 'Tulcea', 'valcea': 'Vâlcea', 'vaslui': 'Vaslui', 'vrancea': 'Vrancea'
-          };
-          numeJudet = judetMap[codJudet.toLowerCase()] || codJudet.charAt(0).toUpperCase() + codJudet.slice(1);
-        }
+        // Reutilizăm numele județului din prima secțiune (deja extras corect)
+        // Nu mai redeclarăm variabila numeJudet aici
 
         for (var i = 0; i < lista_ids.length; i++) {
             let current_id = lista_ids[i];
