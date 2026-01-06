@@ -1,5 +1,6 @@
 """Senzori pentru Alertă ANM Județ România."""
 import logging
+import re
 from datetime import timedelta
 import async_timeout
 from homeassistant.helpers.entity import Entity
@@ -9,23 +10,26 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 _LOGGER = logging.getLogger(__name__)
 
 JSON_URL = "https://www.meteoromania.ro/wp-json/meteoapi/v2/avertizari-generale"
+HTML_URL = "https://www.meteoromania.ro/avertizari/"
 
 async def async_setup_entry(hass, config_entry, async_add_entities):
     # Intervalul de actualizare din configurație (în minute)
     update_interval = timedelta(minutes=config_entry.data.get("update_interval", 10))
 
-    sensor = ANMAlertSensor(hass)
+    alert_sensor = ANMAlertSensor(hass)
+    id_sensor = ANMAlertIDSensor(hass)
 
-    # Adăugarea senzorului
-    async_add_entities([sensor])
+    # Adăugarea senzorilor
+    async_add_entities([alert_sensor, id_sensor])
 
     # Definirea funcției de actualizare care se va executa la intervalul definit
-    async def update_sensor(now):
-        _LOGGER.debug("Se execută actualizarea senzorului la intervalul setat.")
-        await sensor.async_update()
+    async def update_sensors(now):
+        _LOGGER.debug("Se execută actualizarea senzorilor la intervalul setat.")
+        await alert_sensor.async_update()
+        await id_sensor.async_update()
 
     # Programarea actualizării la intervalele setate
-    async_track_time_interval(hass, update_sensor, update_interval)
+    async_track_time_interval(hass, update_sensors, update_interval)
 
 class ANMAlertSensor(Entity):
     def __init__(self, hass):
@@ -114,3 +118,71 @@ class ANMAlertSensor(Entity):
                         _LOGGER.error(f"Eroare HTTP {response.status} la preluarea datelor ANM")
         except Exception as e:
             _LOGGER.error(f"Eroare la actualizarea datelor ANM: {e}")
+
+
+class ANMAlertIDSensor(Entity):
+    """Senzor pentru ID-urile alertelor ANM."""
+
+    def __init__(self, hass):
+        self._hass = hass
+        self._state = "0"
+        self._attributes = {}
+
+    @property
+    def name(self):
+        return "ANM Avertizare ID"
+
+    @property
+    def state(self):
+        return self._state
+
+    @property
+    def extra_state_attributes(self):
+        return self._attributes
+
+    @property
+    def icon(self):
+        return "mdi:identifier"
+
+    @property
+    def unique_id(self):
+        return "anm_avertizare_id"
+
+    async def async_update(self, now=None):
+        _LOGGER.debug("Actualizare ID-uri Avertizări ANM")
+        try:
+            async with async_timeout.timeout(10):
+                session = async_get_clientsession(self._hass, verify_ssl=False)
+                headers = {
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                }
+                async with session.get(HTML_URL, headers=headers) as response:
+                    if response.status == 200:
+                        html_content = await response.text()
+                        
+                        # Extrage toate ID-urile de tipul id_avertizare=XXXX
+                        pattern = r'id_avertizare=(\d+)'
+                        ids = list(set(re.findall(pattern, html_content)))
+                        
+                        if ids:
+                            # Sortează ID-urile și le unește cu virgulă
+                            ids_sorted = sorted(ids, key=int, reverse=True)
+                            self._state = ','.join(ids_sorted)
+                            self._attributes = {
+                                "id_list": ids_sorted,
+                                "numar_id": len(ids_sorted),
+                                "friendly_name": "ANM Avertizare ID"
+                            }
+                            _LOGGER.info(f"ID-uri ANM găsite: {self._state}")
+                        else:
+                            self._state = "0"
+                            self._attributes = {
+                                "id_list": [],
+                                "numar_id": 0,
+                                "friendly_name": "ANM Avertizare ID"
+                            }
+                            _LOGGER.info("Nu s-au găsit ID-uri ANM active")
+                    else:
+                        _LOGGER.error(f"Eroare HTTP {response.status} la preluarea paginii ANM")
+        except Exception as e:
+            _LOGGER.error(f"Eroare la actualizarea ID-urilor ANM: {e}")
