@@ -27,9 +27,7 @@ head:
               key.startsWith('sensor.culoare_harta_') && states[key] && states[key].state !== 'unavailable'
             );
             const colorEntityId = colorSensors.length > 0 ? colorSensors[0] : null;
-            const colorEntity = colorEntityId ? states[colorEntityId] : null;
-            let status = (colorEntity && colorEntity.attributes && colorEntity.attributes.culoare_detectata) ?
-              colorEntity.attributes.culoare_detectata : 'portocaliu';
+            let status = colorEntityId ? states[colorEntityId].state : 'portocaliu';
             
             const colorMap = {
               'galben': '#f1c40f',
@@ -50,9 +48,7 @@ head:
               key.startsWith('sensor.culoare_harta_') && states[key] && states[key].state !== 'unavailable'
             );
             const colorEntityId = colorSensors.length > 0 ? colorSensors[0] : null;
-            const colorEntity = colorEntityId ? states[colorEntityId] : null;
-            let status = (colorEntity && colorEntity.attributes && colorEntity.attributes.culoare_detectata) ?
-              colorEntity.attributes.culoare_detectata : 'portocaliu';
+            let status = colorEntityId ? states[colorEntityId].state : 'portocaliu';
             
             const colorMap = {
               'galben': '#f1c40f',
