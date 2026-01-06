@@ -4,133 +4,55 @@ description: >-
   revine la starea 'liniste'. Funcționează cu orice județ.
 triggers:
   - trigger: state
-    entity_id: sensor.mesaj_meteo_alba
+    entity_id: 
+      - sensor.mesaj_meteo_alba
+      - sensor.mesaj_meteo_arad
+      - sensor.mesaj_meteo_arges
+      - sensor.mesaj_meteo_bacau
+      - sensor.mesaj_meteo_bihor
+      - sensor.mesaj_meteo_bistrita_nasaud
+      - sensor.mesaj_meteo_botosani
+      - sensor.mesaj_meteo_braila
+      - sensor.mesaj_meteo_brasov
+      - sensor.mesaj_meteo_bucuresti
+      - sensor.mesaj_meteo_buzau
+      - sensor.mesaj_meteo_calarasi
+      - sensor.mesaj_meteo_caras_severin
+      - sensor.mesaj_meteo_cluj
+      - sensor.mesaj_meteo_constanta
+      - sensor.mesaj_meteo_covasna
+      - sensor.mesaj_meteo_dambovita
+      - sensor.mesaj_meteo_dolj
+      - sensor.mesaj_meteo_galati
+      - sensor.mesaj_meteo_giurgiu
+      - sensor.mesaj_meteo_gorj
+      - sensor.mesaj_meteo_harghita
+      - sensor.mesaj_meteo_hunedoara
+      - sensor.mesaj_meteo_ialomita
+      - sensor.mesaj_meteo_iasi
+      - sensor.mesaj_meteo_ilfov
+      - sensor.mesaj_meteo_maramures
+      - sensor.mesaj_meteo_mehedinti
+      - sensor.mesaj_meteo_mures
+      - sensor.mesaj_meteo_neamt
+      - sensor.mesaj_meteo_olt
+      - sensor.mesaj_meteo_prahova
+      - sensor.mesaj_meteo_salaj
+      - sensor.mesaj_meteo_satu_mare
+      - sensor.mesaj_meteo_sibiu
+      - sensor.mesaj_meteo_suceava
+      - sensor.mesaj_meteo_teleorman
+      - sensor.mesaj_meteo_timis
+      - sensor.mesaj_meteo_tulcea
+      - sensor.mesaj_meteo_valcea
+      - sensor.mesaj_meteo_vaslui
+      - sensor.mesaj_meteo_vrancea
     to: liniste
-  - trigger: state
-    entity_id: sensor.mesaj_meteo_arad
-    to: liniste
-  - trigger: state
-    entity_id: sensor.mesaj_meteo_arges
-    to: liniste
-  - trigger: state
-    entity_id: sensor.mesaj_meteo_bacau
-    to: liniste
-  - trigger: state
-    entity_id: sensor.mesaj_meteo_bihor
-    to: liniste
-  - trigger: state
-    entity_id: sensor.mesaj_meteo_bistrita_nasaud
-    to: liniste
-  - trigger: state
-    entity_id: sensor.mesaj_meteo_botosani
-    to: liniste
-  - trigger: state
-    entity_id: sensor.mesaj_meteo_braila
-    to: liniste
-  - trigger: state
-    entity_id: sensor.mesaj_meteo_brasov
-    to: liniste
-  - trigger: state
-    entity_id: sensor.mesaj_meteo_bucuresti
-    to: liniste
-  - trigger: state
-    entity_id: sensor.mesaj_meteo_buzau
-    to: liniste
-  - trigger: state
-    entity_id: sensor.mesaj_meteo_calarasi
-    to: liniste
-  - trigger: state
-    entity_id: sensor.mesaj_meteo_caras_severin
-    to: liniste
-  - trigger: state
-    entity_id: sensor.mesaj_meteo_cluj
-    to: liniste
-  - trigger: state
-    entity_id: sensor.mesaj_meteo_constanta
-    to: liniste
-  - trigger: state
-    entity_id: sensor.mesaj_meteo_covasna
-    to: liniste
-  - trigger: state
-    entity_id: sensor.mesaj_meteo_dambovita
-    to: liniste
-  - trigger: state
-    entity_id: sensor.mesaj_meteo_dolj
-    to: liniste
-  - trigger: state
-    entity_id: sensor.mesaj_meteo_galati
-    to: liniste
-  - trigger: state
-    entity_id: sensor.mesaj_meteo_giurgiu
-    to: liniste
-  - trigger: state
-    entity_id: sensor.mesaj_meteo_gorj
-    to: liniste
-  - trigger: state
-    entity_id: sensor.mesaj_meteo_harghita
-    to: liniste
-  - trigger: state
-    entity_id: sensor.mesaj_meteo_hunedoara
-    to: liniste
-  - trigger: state
-    entity_id: sensor.mesaj_meteo_ialomita
-    to: liniste
-  - trigger: state
-    entity_id: sensor.mesaj_meteo_iasi
-    to: liniste
-  - trigger: state
-    entity_id: sensor.mesaj_meteo_ilfov
-    to: liniste
-  - trigger: state
-    entity_id: sensor.mesaj_meteo_maramures
-    to: liniste
-  - trigger: state
-    entity_id: sensor.mesaj_meteo_mehedinti
-    to: liniste
-  - trigger: state
-    entity_id: sensor.mesaj_meteo_mures
-    to: liniste
-  - trigger: state
-    entity_id: sensor.mesaj_meteo_neamt
-    to: liniste
-  - trigger: state
-    entity_id: sensor.mesaj_meteo_olt
-    to: liniste
-  - trigger: state
-    entity_id: sensor.mesaj_meteo_prahova
-    to: liniste
-  - trigger: state
-    entity_id: sensor.mesaj_meteo_salaj
-    to: liniste
-  - trigger: state
-    entity_id: sensor.mesaj_meteo_satu_mare
-    to: liniste
-  - trigger: state
-    entity_id: sensor.mesaj_meteo_sibiu
-    to: liniste
-  - trigger: state
-    entity_id: sensor.mesaj_meteo_suceava
-    to: liniste
-  - trigger: state
-    entity_id: sensor.mesaj_meteo_teleorman
-    to: liniste
-  - trigger: state
-    entity_id: sensor.mesaj_meteo_timis
-    to: liniste
-  - trigger: state
-    entity_id: sensor.mesaj_meteo_tulcea
-    to: liniste
-  - trigger: state
-    entity_id: sensor.mesaj_meteo_valcea
-    to: liniste
-  - trigger: state
-    entity_id: sensor.mesaj_meteo_vaslui
-    to: liniste
-  - trigger: state
-    entity_id: sensor.mesaj_meteo_vrancea
-    to: liniste
+
+variables:
+  cod_judet: "{{ trigger.entity_id.replace('sensor.mesaj_meteo_', '') }}"
+
 conditions:
-  # Verific că entitatea triggeredă e pentru județul selectat (nu unavailable)
   - condition: template
     value_template: >
       {{ states(trigger.entity_id) not in ['unavailable', 'unknown'] and 
@@ -138,31 +60,43 @@ conditions:
 
   - condition: template
     value_template: >
-      {{ states('sensor.avertizari_meteo_anm') not in ['unavailable', 'unknown',
-      'None'] }}
+      {{ states('sensor.avertizari_meteo_anm') not in ['unavailable', 'unknown', 'None'] }}
+  
+  - condition: template
+    value_template: |-
+      {% if trigger.from_state is not none %}
+        {% set old_state = trigger.from_state.state %}
+        {% set old_msg = trigger.from_state.attributes.get('mesaj_complet', '') %}
+        {% set new_msg = trigger.to_state.attributes.get('mesaj_complet', '') %}
+        
+        {% if old_state in ['unavailable', 'unknown'] %}
+          false
+        {% else %}
+          {{ old_state != 'liniste' or old_msg != new_msg }}
+        {% endif %}
+      {% else %}
+        false
+      {% endif %}
+
 actions:
-  # Notificare iPhone
   - action: notify.mobile_app_iphone
     data:
       title: ✅ Alertă Meteo Finalizată
       message: >
-        {%- set cod_judet = trigger.entity_id.replace('sensor.mesaj_meteo_', '') -%}
         Nu mai sunt avertizări meteo active. Vremea s-a liniștit. ☀️
       data:
         url: /dashboard-acasa/0
         push:
           sound: default
 
-  # Notificare HTML5 (browser desktop)
   - action: notify.html5
     data:
       title: ✅ Alertă Meteo Finalizată
       message: >
-        {%- set cod_judet = trigger.entity_id.replace('sensor.mesaj_meteo_', '') -%}
         Nu mai sunt avertizări meteo active. Vremea s-a liniștit. ☀️
       data:
         url: /dashboard-acasa/0
-        tag: "alerta-meteo-{{ trigger.entity_id.replace('sensor.mesaj_meteo_', '') }}"
+        tag: "alerta-meteo-{{ cod_judet }}"
 
 mode: parallel
 max: 43
