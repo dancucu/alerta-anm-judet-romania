@@ -5,7 +5,6 @@ head:
   type: custom:button-card
   entity: |
     [[[
-      // Găsim automat senzorul mesaj_meteo_ pentru județul selectat
       const mesajSensors = Object.keys(states).filter(key =>
         key.startsWith('sensor.mesaj_meteo_') && states[key] && states[key].state !== 'unavailable'
       );
@@ -28,52 +27,12 @@ head:
     icon:
       - width: 22px
       - height: 22px
-      - color: |
-          [[[
-            // Găsim automat senzorul culoare_harta_ pentru județul selectat
-            const colorSensors = Object.keys(states).filter(key =>
-              key.startsWith('sensor.culoare_harta_') && states[key] && states[key].state !== 'unavailable'
-            );
-            const entityId = colorSensors.length > 0 ? colorSensors[0] : null;
-            const entity = entityId ? states[entityId] : null;
-            if (!entity) return 'var(--primary-text-color)';
-
-            const color = entity.state;
-            if (color === 'rosu') return '#e74c3c';
-            if (color === 'portocaliu') return '#e67e22';
-            if (color === 'galben') return '#f1c40f';
-            return 'var(--primary-text-color)';
-          ]]]
-      - animation: |
-          [[[
-            const colorSensors = Object.keys(states).filter(key =>
-              key.startsWith('sensor.culoare_harta_') && states[key] && states[key].state !== 'unavailable'
-            );
-            const entityId = colorSensors.length > 0 ? colorSensors[0] : null;
-            const entity = entityId ? states[entityId] : null;
-            if (!entity) return 'none';
-            const color = entity.state;
-            return ['rosu', 'portocaliu', 'galben'].includes(color) ? 'blink 1s ease-in-out infinite' : 'none';
-          ]]]
+      - color: '#f39c12'
     name:
       - font-weight: 900
       - font-size: 16px
       - text-transform: uppercase
-      - color: |
-          [[[
-            const colorSensors = Object.keys(states).filter(key =>
-              key.startsWith('sensor.culoare_harta_') && states[key] && states[key].state !== 'unavailable'
-            );
-            const entityId = colorSensors.length > 0 ? colorSensors[0] : null;
-            const entity = entityId ? states[entityId] : null;
-            if (!entity) return 'var(--primary-text-color)';
-
-            const color = entity.state;
-            if (color === 'rosu') return '#e74c3c';
-            if (color === 'portocaliu') return '#e67e22';
-            if (color === 'galben') return '#f1c40f';
-            return 'var(--primary-text-color)';
-          ]]]
+      - color: '#f39c12'
 entities:
   - type: custom:button-card
     entity: |
