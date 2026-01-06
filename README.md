@@ -226,22 +226,6 @@ Actions: Trimite notificare de confirmare
 Nu mai sunt avertizări meteo active. Vremea s-a liniștit. ☀️
 ```
 
-#### Activare Automatizări
-
-Automatizările se **activează automat** după configurarea integrării, dar sunt **dezactivate implicit**.
-
-**Pentru a le activa:**
-
-1. Mergi la **Settings** → **Automations & Scenes**
-2. Caută "Notificare Meteo" și click pe fiecare
-3. Bifează **Toggle-ul pentru a activa**
-
-Sau prin YAML:
-```yaml
-automation: !include automation_notificare_inceput_avertizare.yaml
-automation: !include automation_notificare_sfarsit_avertizare.yaml
-```
-
 #### Notificări Configurate
 
 Automatizările trimit notificări pe:
