@@ -171,5 +171,4 @@ actions:
         tag: "alerta-meteo-{{ cod_judet }}"
         url: /dashboard-acasa/0
 
-mode: parallel
-max: 43
+mode: single
