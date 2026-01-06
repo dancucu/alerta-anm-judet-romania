@@ -64,6 +64,10 @@ class ANMAlertSensor(Entity):
     def icon(self):
         return "mdi:weather-lightning-rainy"
 
+    @property
+    def unique_id(self):
+        return "anm_avertizari_meteo"
+
     async def async_update(self, now=None):
         _LOGGER.debug("Actualizare date Avertizări Meteo ANM")
         try:
