@@ -1,0 +1,7 @@
+{
+  "name": "Alertă ANM Județ România",
+  "content_in_root": false,
+  "filename": "alerta_anm_judet_romania",
+  "render_readme": true,
+  "homeassistant": "2023.1.0"
+}
