@@ -61,31 +61,15 @@ head:
           ]]]
 entities:
   - type: custom:button-card
-    entity: |
-      [[[
-        // Detectare automată: găsim senzorul mesaj_meteo care are stare validă (nu unavailable/unknown)
-        const mesajSensors = Object.keys(states).filter(key =>
-          key.startsWith('sensor.mesaj_meteo_') && 
-          states[key] && 
-          states[key].state !== 'unavailable' && 
-          states[key].state !== 'unknown'
-        );
-        return mesajSensors.length > 0 ? mesajSensors[0] : 'sensor.mesaj_meteo_galati';
-      ]]]
+    entity: sensor.mesaj_meteo_galati
     show_name: false
     show_label: true
     show_state: false
     show_icon: false
     label: |
       [[[
-        // 1. PRELUARE DATE - găsim automat senzorul configurat
-        const mesajSensors = Object.keys(states).filter(key =>
-          key.startsWith('sensor.mesaj_meteo_') && 
-          states[key] && 
-          states[key].state !== 'unavailable' && 
-          states[key].state !== 'unknown'
-        );
-        const mesajEntityId = mesajSensors.length > 0 ? mesajSensors[0] : null;
+        // 1. PRELUARE DATE
+        const mesajEntityId = 'sensor.mesaj_meteo_galati';
         const mesajEntity = mesajEntityId ? states[mesajEntityId] : null;
 
         var text_complet = (mesajEntity && mesajEntity.attributes) ?
