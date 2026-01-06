@@ -21,15 +21,17 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
     alert_sensor = ANMAlertSensor(hass)
     id_sensor = ANMAlertIDSensor(hass)
     message_sensor = ANMMessageSensor(hass, judet_cod, judet_nume, alert_sensor)
+    map_sensor = ANMMapSensor(hass, judet_cod, judet_nume, id_sensor)
 
     # Adăugarea senzorilor
-    async_add_entities([alert_sensor, id_sensor, message_sensor])
+    async_add_entities([alert_sensor, id_sensor, message_sensor, map_sensor])
 
     # Definirea funcției de actualizare care se va executa la intervalul definit
     async def update_sensors(now):
         _LOGGER.debug("Se execută actualizarea senzorilor la intervalul setat.")
         await alert_sensor.async_update()
         await id_sensor.async_update()
+        await map_sensor.async_update()
         # Message sensor se actualizează automat când alert_sensor se schimbă
 
     # Programarea actualizării la intervalele setate
@@ -309,3 +311,66 @@ class ANMMessageSensor(Entity):
         }
         
         _LOGGER.info(f"Mesaj meteo actualizat pentru {self._judet_nume}: {self._state} ({tip_cod})")
+
+
+class ANMMapSensor(Entity):
+    """Senzor pentru URL-ul hărții meteo active."""
+
+    def __init__(self, hass, judet_cod, judet_nume, id_sensor):
+        self._hass = hass
+        self._judet_cod = judet_cod
+        self._judet_nume = judet_nume
+        self._id_sensor = id_sensor
+        self._state = None
+        self._attributes = {}
+        
+        import time
+        self._timestamp = int(time.time())
+
+    @property
+    def name(self):
+        return "Harta Meteo Activă"
+
+    @property
+    def state(self):
+        return self._state
+
+    @property
+    def extra_state_attributes(self):
+        return self._attributes
+
+    @property
+    def icon(self):
+        return "mdi:map-legend"
+
+    @property
+    def unique_id(self):
+        return f"anm_harta_meteo_{self._judet_cod.lower()}"
+
+    async def async_update(self, now=None):
+        """Actualizare URL hartă în funcție de ID-urile active."""
+        sensor_ids = self._id_sensor.state
+        
+        # Actualizăm timestamp-ul pentru cache busting
+        import time
+        self._timestamp = int(time.time())
+        
+        if sensor_ids and sensor_ids not in ['unknown', 'unavailable', '0', '']:
+            # Preluăm primul ID din listă
+            first_id = sensor_ids.split(',')[0]
+            self._state = f"https://images.weserv.nl/?url=www.meteoromania.ro/wp-content/plugins/meteo/harti/harta.svg.php?id_avertizare={first_id}"
+            url_direct = f"https://www.meteoromania.ro/wp-content/plugins/meteo/harti/harta.svg.php?id_avertizare={first_id}"
+        else:
+            # Fallback la harta generală
+            self._state = f"https://images.weserv.nl/?url=www.meteoromania.ro/images/avertizari/harta.png&v={self._timestamp}"
+            url_direct = "https://www.meteoromania.ro/images/avertizari/harta.png"
+        
+        self._attributes = {
+            "ids_detectate": sensor_ids if sensor_ids else "0",
+            "url_direct_anm": url_direct,
+            "judet_selectat": self._judet_nume,
+            "judet_cod": self._judet_cod,
+            "friendly_name": "Harta Meteo Activă"
+        }
+        
+        _LOGGER.debug(f"Hartă meteo actualizată pentru {self._judet_nume}: {self._state}")
