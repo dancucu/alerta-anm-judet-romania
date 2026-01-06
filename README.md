@@ -74,24 +74,33 @@ După configurare, verifică că toți senzorii s-au creat:
 - **Settings** → **Devices & Services** → **Entities**
 - Caută "Alertă ANM" sau "mesaj_meteo"
 
+**⏱️ Notă importantă:** API-ul ANM poate dura 30-60 secunde să răspundă la pornire. Senzorul mesaj meteo va afișa "Se încarcă datele meteo..." până când datele sunt preluate cu succes.
+
 ## Automatizări și Card Lovelace
 
 ### Exemple Gata de Folosit
 
-În directorul [`examples/`](examples/) găsești fișiere gata configurate:
+**📁 Directorul [`examples/`](examples/)** conține fișiere de configurare opționale care NU sunt instalate automat cu integrarea:
 
 1. **[automation_notificare_inceput_avertizare.yaml](examples/automation_notificare_inceput_avertizare.yaml)** - Notificări când apar alerte meteo noi
 2. **[automation_notificare_sfarsit_avertizare.yaml](examples/automation_notificare_sfarsit_avertizare.yaml)** - Notificări când alertele se termină
 3. **[lovelace_card.yaml](examples/lovelace_card.yaml)** - Card Lovelace complet configurat
+4. **[README.md](examples/README.md)** - Ghid detaliat de instalare și personalizare
 
-**Instalare Automații:**
-1. Copiază conținutul fișierelor din `examples/` în Home Assistant
-2. Mergi la **Settings** → **Automations & Scenes** → **+ Create Automation** → **3 dots** → **Edit in YAML**
-3. Lipește conținutul și salvează
+**📝 Notă:** Aceste fișiere sunt exemple care trebuie instalate manual. Vezi instrucțiuni detaliate în [`examples/README.md`](examples/README.md).
 
-**Instalare Card Lovelace:**
-1. Deschide dashboard-ul → **Edit Dashboard**
-2. Adaugă **Manual Card** și lipește conținutul din `lovelace_card.yaml`
+**Instalare rapidă - Automatizări:**
+1. Deschide fișierul dorit din [`examples/`](examples/) pe GitHub
+2. Copiază tot conținutul
+3. În Home Assistant: **Settings** → **Automations & Scenes** → **+ Create Automation** → **⋮** → **Edit in YAML**
+4. Lipește conținutul și salvează
+
+**Instalare rapidă - Card Lovelace:**
+1. **Instalează dependențele** prin HACS:
+   - `custom:button-card`
+   - `custom:fold-entity-row`
+2. Copiază conținutul din [`examples/lovelace_card.yaml`](examples/lovelace_card.yaml)
+3. În dashboard: **Edit Dashboard** → **+ Add Card** → **Manual** → lipește conținutul
 
 ## Utilizare
 
@@ -248,11 +257,15 @@ Pentru a adăuga o notificare suplimentară (ex: Telegram):
 
 ## Dependințe
 
-- Home Assistant 2023.11+
-- `requests` (instalat automat)
-- Custom cards:
-  - `custom:button-card` (https://github.com/custom-cards/button-card)
-  - `custom:fold-entity-row` (https://github.com/thomasloven/lovelace-fold-entity-row)
+### Pentru Integrare (instalate automat):
+- Home Assistant 2023.1.0+
+- Python 3.10+
+
+### Pentru Card Lovelace (opțional, instalare manuală prin HACS):
+- `custom:button-card` - https://github.com/custom-cards/button-card
+- `custom:fold-entity-row` - https://github.com/thomasloven/lovelace-fold-entity-row
+
+**Notă:** Custom cards sunt necesare doar dacă folosești cardul Lovelace din [`examples/`](examples/).
 
 ## Probleme Frecvente
 
@@ -263,10 +276,13 @@ Pentru a adăuga o notificare suplimentară (ex: Telegram):
 ### "Senzori nu se actualizează"
 - Verifică intervalul de actualizare (minim 5 minute)
 - Controlează conexiunea la internet și website-ul ANM
+- API-ul ANM poate fi lent - așteaptă până la 60 secunde pentru primul răspuns
 
 ### "Card Lovelace arată gol"
-- Instalează `custom:button-card` și `custom:fold-entity-row`
+- Instalează `custom:button-card` și `custom:fold-entity-row` prin HACS
 - Reload browser (Ctrl+Shift+R)
+- Verifică că ai copiat cardul din [`examples/lovelace_card.yaml`](examples/lovelace_card.yaml)
+- Asigură-te că senzorii sunt disponibili (nu 'unavailable')
 
 ### "Culoare rămâne portocalie"
 - Verifică că senzorul `sensor.culoare_harta_{judet}` are state valid
