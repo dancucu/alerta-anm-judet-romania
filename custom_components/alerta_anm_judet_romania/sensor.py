@@ -236,8 +236,8 @@ class ANMMessageSensor(Entity):
 
     @property
     def available(self):
-        """Sensor is available only if alert sensor has valid data."""
-        return self._alert_sensor.state not in [None, "unknown", "unavailable"]
+        """Sensor is always available, shows 'liniste' when no alerts."""
+        return True
 
     async def async_update(self, now=None):
         """Update se face automat când alert_sensor are date noi."""
@@ -245,6 +245,16 @@ class ANMMessageSensor(Entity):
 
     async def _process_alerts(self):
         """Procesează alertele pentru județul selectat."""
+        # Verifică dacă alert_sensor are date valide
+        if self._alert_sensor.state in [None, "unknown", "unavailable"]:
+            self._state = "liniste"
+            self._attributes = {
+                "tip_cod": "Verde",
+                "mesaj_complet": "Se încarcă datele meteo...",
+                "friendly_name": f"Mesaj Meteo {self._judet_nume}"
+            }
+            return
+            
         if not self._alert_sensor._attributes.get('avertizari'):
             self._state = "liniste"
             self._attributes = {
