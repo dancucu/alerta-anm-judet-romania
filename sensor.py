@@ -15,18 +15,22 @@ HTML_URL = "https://www.meteoromania.ro/avertizari/"
 async def async_setup_entry(hass, config_entry, async_add_entities):
     # Intervalul de actualizare din configurație (în minute)
     update_interval = timedelta(minutes=config_entry.data.get("update_interval", 10))
+    judet_cod = config_entry.data.get("judet_cod", "B")
+    judet_nume = config_entry.data.get("judet_nume", "București")
 
     alert_sensor = ANMAlertSensor(hass)
     id_sensor = ANMAlertIDSensor(hass)
+    message_sensor = ANMMessageSensor(hass, judet_cod, judet_nume, alert_sensor)
 
     # Adăugarea senzorilor
-    async_add_entities([alert_sensor, id_sensor])
+    async_add_entities([alert_sensor, id_sensor, message_sensor])
 
     # Definirea funcției de actualizare care se va executa la intervalul definit
     async def update_sensors(now):
         _LOGGER.debug("Se execută actualizarea senzorilor la intervalul setat.")
         await alert_sensor.async_update()
         await id_sensor.async_update()
+        # Message sensor se actualizează automat când alert_sensor se schimbă
 
     # Programarea actualizării la intervalele setate
     async_track_time_interval(hass, update_sensors, update_interval)
@@ -186,3 +190,122 @@ class ANMAlertIDSensor(Entity):
                         _LOGGER.error(f"Eroare HTTP {response.status} la preluarea paginii ANM")
         except Exception as e:
             _LOGGER.error(f"Eroare la actualizarea ID-urilor ANM: {e}")
+
+
+class ANMMessageSensor(Entity):
+    """Senzor pentru mesajul complet de avertizare pentru județul selectat."""
+
+    def __init__(self, hass, judet_cod, judet_nume, alert_sensor):
+        self._hass = hass
+        self._judet_cod = judet_cod
+        self._judet_nume = judet_nume
+        self._alert_sensor = alert_sensor
+        self._state = "liniste"
+        self._attributes = {}
+
+    @property
+    def name(self):
+        return f"Mesaj Meteo {self._judet_nume}"
+
+    @property
+    def state(self):
+        return self._state
+
+    @property
+    def extra_state_attributes(self):
+        return self._attributes
+
+    @property
+    def icon(self):
+        return "mdi:alert-decagram"
+
+    @property
+    def unique_id(self):
+        return f"anm_mesaj_meteo_{self._judet_cod.lower()}"
+
+    @property
+    def available(self):
+        """Sensor is available only if alert sensor has valid data."""
+        return self._alert_sensor.state not in [None, "unknown", "unavailable"]
+
+    async def async_update(self, now=None):
+        """Update se face automat când alert_sensor are date noi."""
+        await self._process_alerts()
+
+    async def _process_alerts(self):
+        """Procesează alertele pentru județul selectat."""
+        if not self._alert_sensor._attributes.get('avertizari'):
+            self._state = "liniste"
+            self._attributes = {
+                "tip_cod": "Verde",
+                "mesaj_complet": f"Nu sunt avertizări active pentru județul {self._judet_nume}.",
+                "friendly_name": f"Mesaj Meteo {self._judet_nume}"
+            }
+            return
+
+        avertizari = self._alert_sensor._attributes.get('avertizari', [])
+        
+        # Filtrăm alertele pentru județul curent
+        if isinstance(avertizari, str):
+            self._state = "liniste"
+            self._attributes = {
+                "tip_cod": "Verde",
+                "mesaj_complet": avertizari,
+                "friendly_name": f"Mesaj Meteo {self._judet_nume}"
+            }
+            return
+        
+        gl_list = [a for a in avertizari if a.get('judet') == self._judet_cod]
+        
+        if not gl_list:
+            self._state = "liniste"
+            self._attributes = {
+                "tip_cod": "Verde",
+                "mesaj_complet": f"Nu sunt avertizări active pentru județul {self._judet_nume}.",
+                "friendly_name": f"Mesaj Meteo {self._judet_nume}"
+            }
+            return
+        
+        self._state = "alerta"
+        
+        # Calculăm cel mai grav cod
+        max_code = max([int(a.get('culoare', 0)) for a in gl_list])
+        tip_cod_map = {3: "Rosu", 2: "Portocaliu", 1: "Galben", 0: "Verde"}
+        tip_cod = tip_cod_map.get(max_code, "Verde")
+        
+        # Construim mesajul complet
+        mesaje = []
+        for item in gl_list:
+            msg_raw = item.get('mesaj', '')
+            
+            # Curățăm HTML-ul
+            msg_raw = msg_raw.replace('<br />', '\n').replace('</p>', '\n')
+            msg_raw = re.sub(r'<[^>]*>', '', msg_raw)
+            msg_raw = msg_raw.replace('&nbsp;', ' ').replace('&ndash;', '-').strip()
+            
+            # Filtrăm mesajul pe baza culorii
+            cod = int(item.get('culoare', 0))
+            
+            if cod == 1:  # Galben
+                msg_raw = re.sub(r'COD PORTOCALIU[\s\S]*?(?=COD|$)', '', msg_raw, flags=re.IGNORECASE)
+                msg_raw = re.sub(r'COD RO[SȘ]U[\s\S]*?(?=COD|$)', '', msg_raw, flags=re.IGNORECASE)
+            elif cod == 2:  # Portocaliu
+                msg_raw = re.sub(r'COD GALBEN[\s\S]*?(?=COD|$)', '', msg_raw, flags=re.IGNORECASE)
+                msg_raw = re.sub(r'COD RO[SȘ]U[\s\S]*?(?=COD|$)', '', msg_raw, flags=re.IGNORECASE)
+            elif cod == 3:  # Roșu
+                msg_raw = re.sub(r'COD GALBEN[\s\S]*?(?=COD|$)', '', msg_raw, flags=re.IGNORECASE)
+                msg_raw = re.sub(r'COD PORTOCALIU[\s\S]*?(?=COD|$)', '', msg_raw, flags=re.IGNORECASE)
+            
+            # Curățăm rânduri goale duble
+            msg_final = re.sub(r'\n\s*\n', '\n\n', msg_raw).strip()
+            mesaje.append(msg_final)
+        
+        mesaj_complet = '\n\n'.join(mesaje).strip()
+        
+        self._attributes = {
+            "tip_cod": tip_cod,
+            "mesaj_complet": mesaj_complet if mesaj_complet else f"Nu sunt avertizări active pentru județul {self._judet_nume}.",
+            "friendly_name": f"Mesaj Meteo {self._judet_nume}"
+        }
+        
+        _LOGGER.info(f"Mesaj meteo actualizat pentru {self._judet_nume}: {self._state} ({tip_cod})")
