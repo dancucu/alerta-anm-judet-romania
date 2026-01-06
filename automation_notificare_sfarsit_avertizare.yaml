@@ -140,22 +140,6 @@ conditions:
     value_template: >
       {{ states('sensor.avertizari_meteo_anm') not in ['unavailable', 'unknown',
       'None'] }}
-  
-  - condition: template
-    value_template: |-
-      {% if trigger.from_state is not none %}
-        {% set old_state = trigger.from_state.state %}
-        {% set old_msg = trigger.from_state.attributes.mesaj_complet | default('') %}
-        {% set new_msg = trigger.to_state.attributes.mesaj_complet | default('') %}
-        
-        {% if old_state in ['unavailable', 'unknown'] %}
-          false
-        {% else %}
-          {{ old_state != 'liniste' or old_msg != new_msg }}
-        {% endif %}
-      {% else %}
-        false
-      {% endif %}
 actions:
   # Extrage informații din senzor
   - variables:

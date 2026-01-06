@@ -94,10 +94,6 @@ conditions:
       {{ states(trigger.entity_id) not in ['unavailable', 'unknown'] and 
          state_attr(trigger.entity_id, 'mesaj_complet') is not none }}
 
-  - condition: state
-    state: alerta
-    entity_id: "{{ trigger.entity_id }}"
-  
   - condition: template
     value_template: >
       {{ states('sensor.avertizari_meteo_anm') not in ['unavailable', 'unknown',
