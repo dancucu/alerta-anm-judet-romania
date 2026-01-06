@@ -21,12 +21,48 @@ head:
     icon:
       - width: 22px
       - height: 22px
-      - color: '#f39c12'
+      - color: |
+          [[[
+            const colorSensors = Object.keys(states).filter(key =>
+              key.startsWith('sensor.culoare_harta_') && states[key] && states[key].state !== 'unavailable'
+            );
+            const colorEntityId = colorSensors.length > 0 ? colorSensors[0] : null;
+            const colorEntity = colorEntityId ? states[colorEntityId] : null;
+            let status = (colorEntity && colorEntity.attributes && colorEntity.attributes.culoare_detectata) ?
+              colorEntity.attributes.culoare_detectata : 'portocaliu';
+            
+            const colorMap = {
+              'galben': '#f1c40f',
+              'portocaliu': '#e67e22',
+              'rosu': '#e74c3c',
+              'informare': '#3498db',
+              'verde': '#27ae60'
+            };
+            return colorMap[status] || '#f39c12';
+          ]]]
     name:
       - font-weight: 900
       - font-size: 16px
       - text-transform: uppercase
-      - color: '#f39c12'
+      - color: |
+          [[[
+            const colorSensors = Object.keys(states).filter(key =>
+              key.startsWith('sensor.culoare_harta_') && states[key] && states[key].state !== 'unavailable'
+            );
+            const colorEntityId = colorSensors.length > 0 ? colorSensors[0] : null;
+            const colorEntity = colorEntityId ? states[colorEntityId] : null;
+            let status = (colorEntity && colorEntity.attributes && colorEntity.attributes.culoare_detectata) ?
+              colorEntity.attributes.culoare_detectata : 'portocaliu';
+            
+            const colorMap = {
+              'galben': '#f1c40f',
+              'portocaliu': '#e67e22',
+              'rosu': '#e74c3c',
+              'informare': '#3498db',
+              'verde': '#27ae60'
+            };
+            return colorMap[status] || '#f39c12';
+          ]]]
 entities:
   - type: custom:button-card
     entity: |
