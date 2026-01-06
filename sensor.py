@@ -1,6 +1,9 @@
 """Senzori pentru Alertă ANM Județ România."""
 import logging
 import re
+import json
+import asyncio
+import os
 from datetime import timedelta
 import async_timeout
 from homeassistant.helpers.entity import Entity
@@ -22,9 +25,10 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
     id_sensor = ANMAlertIDSensor(hass)
     message_sensor = ANMMessageSensor(hass, judet_cod, judet_nume, alert_sensor)
     map_sensor = ANMMapSensor(hass, judet_cod, judet_nume, id_sensor)
+    color_sensor = ANMMapColorSensor(hass, judet_cod, judet_nume, id_sensor)
 
     # Adăugarea senzorilor
-    async_add_entities([alert_sensor, id_sensor, message_sensor, map_sensor])
+    async_add_entities([alert_sensor, id_sensor, message_sensor, map_sensor, color_sensor])
 
     # Definirea funcției de actualizare care se va executa la intervalul definit
     async def update_sensors(now):
@@ -32,6 +36,7 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
         await alert_sensor.async_update()
         await id_sensor.async_update()
         await map_sensor.async_update()
+        await color_sensor.async_update()
         # Message sensor se actualizează automat când alert_sensor se schimbă
 
     # Programarea actualizării la intervalele setate
@@ -374,3 +379,101 @@ class ANMMapSensor(Entity):
         }
         
         _LOGGER.debug(f"Hartă meteo actualizată pentru {self._judet_nume}: {self._state}")
+
+
+class ANMMapColorSensor(Entity):
+    """Senzor pentru culoarea județului pe hartă."""
+
+    def __init__(self, hass, judet_cod, judet_nume, id_sensor):
+        self._hass = hass
+        self._judet_cod = judet_cod
+        self._judet_nume = judet_nume
+        self._id_sensor = id_sensor
+        self._state = "verde"
+        self._attributes = {}
+
+    @property
+    def name(self):
+        return f"Culoare Hartă {self._judet_nume}"
+
+    @property
+    def state(self):
+        return self._state
+
+    @property
+    def extra_state_attributes(self):
+        return self._attributes
+
+    @property
+    def icon(self):
+        if self._state == "rosu":
+            return "mdi:alert-octagon"
+        elif self._state == "portocaliu":
+            return "mdi:alert"
+        elif self._state == "galben":
+            return "mdi:alert-circle"
+        elif self._state == "informare":
+            return "mdi:information"
+        return "mdi:check-circle"
+
+    @property
+    def unique_id(self):
+        return f"anm_culoare_harta_{self._judet_cod.lower()}"
+
+    async def async_update(self, now=None):
+        """Actualizare culoare prin apelarea scriptului check_map.py."""
+        sensor_ids = self._id_sensor.state
+        
+        if not sensor_ids or sensor_ids in ['unknown', 'unavailable', '0', '']:
+            self._state = "verde"
+            self._attributes = {
+                "date_harti": {},
+                "judet_cod": self._judet_cod,
+                "friendly_name": f"Culoare Hartă {self._judet_nume}"
+            }
+            return
+        
+        # Calea către script
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        script_path = os.path.join(script_dir, "check_map.py")
+        
+        try:
+            # Apelăm scriptul check_map.py
+            process = await asyncio.create_subprocess_exec(
+                "python3", script_path, sensor_ids, self._judet_cod,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            
+            stdout, stderr = await process.communicate()
+            
+            if process.returncode == 0:
+                result = json.loads(stdout.decode())
+                date_harti = result.get("date_harti", {})
+                
+                # Determinăm cea mai gravă culoare
+                priority = {"rosu": 4, "portocaliu": 3, "galben": 2, "informare": 1, "verde": 0}
+                max_color = "verde"
+                max_priority = 0
+                
+                for map_id, color in date_harti.items():
+                    if priority.get(color, 0) > max_priority:
+                        max_priority = priority.get(color, 0)
+                        max_color = color
+                
+                self._state = max_color
+                self._attributes = {
+                    "date_harti": date_harti,
+                    "numar_harti_verificate": len(date_harti),
+                    "judet_cod": self._judet_cod,
+                    "friendly_name": f"Culoare Hartă {self._judet_nume}"
+                }
+                
+                _LOGGER.info(f"Culoare hartă pentru {self._judet_nume}: {self._state}")
+            else:
+                _LOGGER.error(f"Eroare la rularea check_map.py: {stderr.decode()}")
+                self._state = "necunoscut"
+                
+        except Exception as e:
+            _LOGGER.error(f"Eroare la verificarea culorii hărții: {e}")
+            self._state = "necunoscut"
