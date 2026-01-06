@@ -143,21 +143,99 @@ entities:
     # ... (vezi fișierul lovelace_card.yaml pentru template complet)
 ```
 
-### Automatizări Exemple
+### Automatizări Incluse
 
-**Notificare la alertă roșu:**
+Integrarea vine cu **2 automatizări gata configurate** pentru notificări intelligent:
+
+#### 1. **Notificare Inceput Alertă** (`automation_notificare_inceput_avertizare.yaml`)
+
+Se declanșează când o **nouă alertă meteo apare** pe senzorul județului selectat.
+
+**Funcționalități:**
+- Titlu colorat dinamic (🚨 COD ROȘU / 🟠 COD PORTOCALIU / ⚠️ COD GALBEN)
+- Extrage și formatează **Interval de valabilitate** și **Fenomene vizate**
+- Trimite notificări pe **iPhone** și **HTML5** (browser)
+- Sound diferit pentru cod roșu/portocaliu vs galben
+
+**Ce face:**
+```
+Trigger: Senzor mesaj_meteo_{judet} merge în stare "alerta"
+         ↓
+Variables: Extrage cod_judet și mesaj_complet din atribute
+         ↓
+Conditions: Verifică validitate senzor și disponibilitate ANM
+         ↓
+Actions: Trimite notificări cu Interval și Fenomene formatate
+```
+
+**Exemplu mesaj iPhone:**
+```
+🚨 COD ROȘU GALAȚI
+🕒 Luni 6 ianuarie 2025, 08:00 - Marți 6 ianuarie 2025, 20:00
+
+💨 Fenomene vizate:
+- Vânt puternic
+- Viscol
+```
+
+#### 2. **Notificare Sfarsit Alertă** (`automation_notificare_sfarsit_avertizare.yaml`)
+
+Se declanșează când alerta **se termină** (stare revine la `liniste`).
+
+**Funcționalități:**
+- Mesaj de confirmare: ✅ Alertă Meteo Finalizată
+- Notificări pe **iPhone** și **HTML5**
+- Validări pentru a preveni déclanșări false
+
+**Ce face:**
+```
+Trigger: Senzor mesaj_meteo_{judet} merge în stare "liniste"
+         ↓
+Conditions: Verifică că trecerea de stare e validă
+         ↓
+Actions: Trimite notificare de confirmare
+```
+
+**Exemplu mesaj:**
+```
+✅ Alertă Meteo Finalizată
+Nu mai sunt avertizări meteo active. Vremea s-a liniștit. ☀️
+```
+
+#### Activare Automatizări
+
+Automatizările se **activează automat** după configurarea integrării, dar sunt **dezactivate implicit**.
+
+**Pentru a le activa:**
+
+1. Mergi la **Settings** → **Automations & Scenes**
+2. Caută "Notificare Meteo" și click pe fiecare
+3. Bifează **Toggle-ul pentru a activa**
+
+Sau prin YAML:
 ```yaml
-automation:
-  - alias: "Alertă ANM - Cod Roșu"
-    trigger:
-      platform: state
-      entity_id: sensor.culoare_harta_galati
-      to: "rosu"
-    action:
-      service: notify.mobile_app_telefon
-      data:
-        title: "⚠️ ALERTĂ METEO COD ROȘU"
-        message: "{{ state_attr('sensor.mesaj_meteo_galati', 'mesaj_complet') }}"
+automation: !include automation_notificare_inceput_avertizare.yaml
+automation: !include automation_notificare_sfarsit_avertizare.yaml
+```
+
+#### Notificări Configurate
+
+Automatizările trimit notificări pe:
+- **iPhone** - `notify.mobile_app_iphone` (trebuie să existe în Home Assistant)
+- **HTML5** - `notify.html5` (notificări browser desktop)
+
+**Pentru a configura notificări pe alte dispozitive**, editează fișierele YAML și înlocuiește serviciile notify cu ale tale (ex: `notify.telegram`, `notify.discord`, etc.).
+
+### Exemplu Notificare Personalizată
+
+Pentru a adăuga o notificare suplimentară (ex: Telegram):
+
+```yaml
+# În automation_notificare_inceput_avertizare.yaml, adaugă după acțiunea HTML5:
+  - action: notify.telegram
+    data:
+      title: "{{ 'COD ROȘU' if 'rosu' in mesaj_complet | lower else 'Avertizare Meteo' }}"
+      message: "{{ mesaj_complet }}"
 ```
 
 ## Dependințe
