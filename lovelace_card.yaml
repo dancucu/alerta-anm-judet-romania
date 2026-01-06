@@ -118,6 +118,24 @@ entities:
 
         var html_final = '';
 
+        // Determinăm numele județului din senzor (LA ÎNCEPUT pentru a fi disponibil peste tot)
+        let numeJudet = 'Județul';
+        if (mesajEntityId && mesajEntityId.includes('mesaj_meteo_')) {
+          const codJudet = mesajEntityId.replace('sensor.mesaj_meteo_', '');
+          const judetMap = {
+            'alba': 'Alba', 'arad': 'Arad', 'arges': 'Argeș', 'bacau': 'Bacău', 'bihor': 'Bihor',
+            'bistrita_nasaud': 'Bistrița-Năsăud', 'botosani': 'Botoșani', 'braila': 'Brăila', 'brasov': 'Brașov',
+            'bucuresti': 'București', 'buzau': 'Buzău', 'calarasi': 'Călărași', 'caras_severin': 'Caraș-Severin',
+            'cluj': 'Cluj', 'constanta': 'Constanța', 'covasna': 'Covasna', 'dambovita': 'Dâmbovița', 'dolj': 'Dolj',
+            'galati': 'Galați', 'giurgiu': 'Giurgiu', 'gorj': 'Gorj', 'harghita': 'Harghita', 'hunedoara': 'Hunedoara',
+            'ialomita': 'Ialomița', 'iasi': 'Iași', 'ilfov': 'Ilfov', 'maramures': 'Maramureș', 'mehedinti': 'Mehedinți',
+            'mures': 'Mureș', 'neamt': 'Neamț', 'olt': 'Olt', 'prahova': 'Prahova', 'salaj': 'Sălaj',
+            'satu_mare': 'Satu Mare', 'sibiu': 'Sibiu', 'suceava': 'Suceava', 'teleorman': 'Teleorman', 'timis': 'Timiș',
+            'tulcea': 'Tulcea', 'valcea': 'Vâlcea', 'vaslui': 'Vaslui', 'vrancea': 'Vrancea'
+          };
+          numeJudet = judetMap[codJudet.toLowerCase()] || codJudet.charAt(0).toUpperCase() + codJudet.slice(1);
+        }
+
         // --- PARTEA 1: TEXTUL MESAJELOR ---
         const regex = /MESAJ\s+(\d+)([\s\S]*?)(?=(?:MESAJ\s+\d+)|$)/gi;
         let match;
@@ -143,25 +161,7 @@ entities:
             msg = msg.replace(/Zone afectate:?/g, `<br>• <b style="color: ${highlightColor}">Zone:</b>`);
             msg = msg.replace(/COD GALBEN/g, '<br><span style="background-color: #f1c40f; color: black; padding: 2px 4px; border-radius: 4px; font-weight: bold; font-size: 0.9em;">COD GALBEN</span>');
             msg = msg.replace(/COD PORTOCALIU/g, '<br><span style="background-color: #e67e22; color: black; padding: 2px 4px; border-radius: 4px; font-weight: bold; font-size: 0.9em;">COD PORTOCALIU</span>');
-            msg = msg.replace(/COD ROSU/g, '<br><span style="background-color: #e74c3c; color: white; padding: 2px 4px; border-radius: 4px; font-weight: bold; font-size: 0.9em;">COD ROSU</span>');
-
-            // Determinăm numele județului din senzor
-            let numeJudet = 'Județul';
-            if (mesajEntityId && mesajEntityId.includes('mesaj_meteo_')) {
-              const codJudet = mesajEntityId.replace('sensor.mesaj_meteo_', '');
-              const judetMap = {
-                'alba': 'Alba', 'arad': 'Arad', 'arges': 'Argeș', 'bacau': 'Bacău', 'bihor': 'Bihor',
-                'bistrita_nasaud': 'Bistrița-Năsăud', 'botosani': 'Botoșani', 'braila': 'Brăila', 'brasov': 'Brașov',
-                'bucuresti': 'București', 'buzau': 'Buzău', 'calarasi': 'Călărași', 'caras_severin': 'Caraș-Severin',
-                'cluj': 'Cluj', 'constanta': 'Constanța', 'covasna': 'Covasna', 'dambovita': 'Dâmbovița', 'dolj': 'Dolj',
-                'galati': 'Galați', 'giurgiu': 'Giurgiu', 'gorj': 'Gorj', 'harghita': 'Harghita', 'hunedoara': 'Hunedoara',
-                'ialomita': 'Ialomița', 'iasi': 'Iași', 'ilfov': 'Ilfov', 'maramures': 'Maramureș', 'mehedinti': 'Mehedinți',
-                'mures': 'Mureș', 'neamt': 'Neamț', 'olt': 'Olt', 'prahova': 'Prahova', 'salaj': 'Sălaj',
-                'satu_mare': 'Satu Mare', 'sibiu': 'Sibiu', 'suceava': 'Suceava', 'teleorman': 'Teleorman', 'timis': 'Timiș',
-                'tulcea': 'Tulcea', 'valcea': 'Vâlcea', 'vaslui': 'Vaslui', 'vrancea': 'Vrancea'
-              };
-              numeJudet = judetMap[codJudet.toLowerCase()] || codJudet.charAt(0).toUpperCase() + codJudet.slice(1);
-            }
+            msg = msg.replace(/COD ROSU/g, '<br><span style="background-color: #e74c3c; color: white; padding: 2px 4px; border-radius: 4px; font-weight: bold; font-size: 0.9em;">COD ROSU</span>')
 
             const regexCuvinte = new RegExp(`(${numeJudet}[a-zĂÂÎȘȚăâîșț]*)`, 'gi');
             msg = msg.replace(regexCuvinte, `<b style="background-color: rgba(255,255,255,0.1); color: ${highlightColor}; text-decoration: underline;">$&</b>`);
