@@ -3,13 +3,7 @@ padding: 0
 clickable: true
 head:
   type: custom:button-card
-  entity: |
-    [[[
-      const mesajSensors = Object.keys(states).filter(key =>
-        key.startsWith('sensor.mesaj_meteo_') && states[key] && states[key].state !== 'unavailable'
-      );
-      return mesajSensors.length > 0 ? mesajSensors[0] : 'sensor.dummy_entity';
-    ]]]
+  entity: sensor.avertizari_meteo_anm
   name: AVERTIZARE METEO
   icon: mdi:alert
   show_name: true
