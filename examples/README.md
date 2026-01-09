@@ -70,7 +70,7 @@ Trebuie instalate aceste custom cards prin HACS:
 6. Lipește conținutul copiat
 7. Click **Save**
 
-**📌 Notă:** Cardul detectează automat județul configurat în integrare. Dacă ai configurat un singur județ, cardul va afișa automat alertele pentru acel județ.
+**📌 Notă:** Cardul nu detectează automat județul configurat în integrare. Trebuie sa modifici numele judetului in toate locurile unde il gasesti in codul cardului. Cel mai simplu o faci cu un editor de text, apeland functia find and replace, slecatand ”galati”.
 
 ---
 
