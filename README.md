@@ -1,4 +1,7 @@
 # Alertă ANM Județ România
+![GitHub last commit](https://img.shields.io/github/last-commit/dancucu/alerta-anm-judet-romania?label=ultimul%20update&style=flat-square&color=%239be0c5)
+![GitHub release (latest by date)](https://img.shields.io/github/v/release/dancucu/alerta-anm-judet-romania?label=versiune&style=flat-square&color=%239be0c5)
+![GitHub clones](https://img.shields.io/badge/dynamic/json?color=%239be0c5&label=clonari%20unice&query=count&url=https%3A%2F%2Fapi.countapi.xyz%2Fhit%2Fdancucu-alerta-anm%2Fvisits&style=flat-square)
 
 Integrare Home Assistant pentru alertele meteorologice ANM (Administrația Națională de Meteorologie) pe județe. Afișează alerte meteo în timp real cu suport pentru toate cele 42 de județe din România plus București.
 
