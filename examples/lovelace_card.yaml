@@ -1,209 +1,138 @@
-type: custom:fold-entity-row
-padding: 0
-clickable: true
-head:
-  type: custom:button-card
-  entity: sensor.avertizari_meteo_anm
-  name: AVERTIZARE METEO
-  icon: mdi:alert
-  show_name: true
-  show_icon: true
-  show_state: false
-  tap_action:
-    action: none
-  styles:
-    card:
-      - background-color: transparent
-      - box-shadow: none
-      - padding: 0px
-      - margin: 0px
-      - pointer-events: none
-    icon:
-      - width: 22px
-      - height: 22px
-      - color: |
-          [[[
-            const colorSensors = Object.keys(states).filter(key =>
-              key.startsWith('sensor.culoare_harta_') && states[key] && states[key].state !== 'unavailable'
-            );
-            const colorEntityId = colorSensors.length > 0 ? colorSensors[0] : null;
-            let status = colorEntityId ? states[colorEntityId].state : 'portocaliu';
-            
-            const colorMap = {
-              'galben': '#f1c40f',
-              'portocaliu': '#e67e22',
-              'rosu': '#e74c3c',
-              'informare': '#3498db',
-              'verde': '#27ae60'
-            };
-            return colorMap[status] || '#f39c12';
-          ]]]
-    name:
-      - font-weight: 900
-      - font-size: 16px
-      - text-transform: uppercase
-      - color: |
-          [[[
-            const colorSensors = Object.keys(states).filter(key =>
-              key.startsWith('sensor.culoare_harta_') && states[key] && states[key].state !== 'unavailable'
-            );
-            const colorEntityId = colorSensors.length > 0 ? colorSensors[0] : null;
-            let status = colorEntityId ? states[colorEntityId].state : 'portocaliu';
-            
-            const colorMap = {
-              'galben': '#f1c40f',
-              'portocaliu': '#e67e22',
-              'rosu': '#e74c3c',
-              'informare': '#3498db',
-              'verde': '#27ae60'
-            };
-            return colorMap[status] || '#f39c12';
-          ]]]
-entities:
-  - type: custom:button-card
+type: conditional
+conditions:
+  - condition: state
     entity: sensor.mesaj_meteo_galati
-    show_name: false
-    show_label: true
+    state: alerta
+card:
+  type: custom:fold-entity-row
+  padding: 0
+  clickable: true
+  head:
+    type: custom:button-card
+    entity: sensor.avertizari_meteo_anm
+    name: AVERTIZARE METEO
+    icon: mdi:alert
+    show_name: true
+    show_icon: true
     show_state: false
-    show_icon: false
-    label: |
-      [[[
-        // 1. PRELUARE DATE
-        const mesajEntityId = 'sensor.mesaj_meteo_galati';
-        const mesajEntity = mesajEntityId ? states[mesajEntityId] : null;
-
-        var text_complet = (mesajEntity && mesajEntity.attributes) ?
-          (mesajEntity.attributes.mesaj_complet || 'Nu există detalii.') : 'Nu există detalii.';
-
-        // Găsim automat senzorul anm_avertizare_id
-        const sensor_ids = states['sensor.anm_avertizare_id'];
-        
-        var lista_ids = [];
-        if (sensor_ids && sensor_ids.state && sensor_ids.state != '0' && sensor_ids.state != 'unavailable') {
-            lista_ids = sensor_ids.state.split(',').map(s => s.trim()).filter(s => s !== '');
-        }
-
-        // Găsim senzorul culoare_harta_ pentru județul selectat
-        const colorSensors = Object.keys(states).filter(key =>
-          key.startsWith('sensor.culoare_harta_') && states[key] && states[key].state !== 'unavailable'
-        );
-        const colorEntityId = colorSensors.length > 0 ? colorSensors[0] : null;
-        const sensor_colors = colorEntityId ? states[colorEntityId] : null;
-        var map_colors = (sensor_colors && sensor_colors.attributes && sensor_colors.attributes.date_harti) ?
-          sensor_colors.attributes.date_harti : {};
-
-        var html_final = '';
-
-        // Determinăm numele județului din senzor (LA ÎNCEPUT pentru a fi disponibil peste tot)
-        let numeJudet = 'Județul';
-        if (mesajEntityId && mesajEntityId.includes('mesaj_meteo_')) {
-          const codJudet = mesajEntityId.replace('sensor.mesaj_meteo_', '');
-          const judetMap = {
-            'alba': 'Alba', 'arad': 'Arad', 'arges': 'Argeș', 'bacau': 'Bacău', 'bihor': 'Bihor',
-            'bistrita_nasaud': 'Bistrița-Năsăud', 'botosani': 'Botoșani', 'braila': 'Brăila', 'brasov': 'Brașov',
-            'bucuresti': 'București', 'buzau': 'Buzău', 'calarasi': 'Călărași', 'caras_severin': 'Caraș-Severin',
-            'cluj': 'Cluj', 'constanta': 'Constanța', 'covasna': 'Covasna', 'dambovita': 'Dâmbovița', 'dolj': 'Dolj',
-            'galati': 'Galați', 'giurgiu': 'Giurgiu', 'gorj': 'Gorj', 'harghita': 'Harghita', 'hunedoara': 'Hunedoara',
-            'ialomita': 'Ialomița', 'iasi': 'Iași', 'ilfov': 'Ilfov', 'maramures': 'Maramureș', 'mehedinti': 'Mehedinți',
-            'mures': 'Mureș', 'neamt': 'Neamț', 'olt': 'Olt', 'prahova': 'Prahova', 'salaj': 'Sălaj',
-            'satu_mare': 'Satu Mare', 'sibiu': 'Sibiu', 'suceava': 'Suceava', 'teleorman': 'Teleorman', 'timis': 'Timiș',
-            'tulcea': 'Tulcea', 'valcea': 'Vâlcea', 'vaslui': 'Vaslui', 'vrancea': 'Vrancea'
-          };
-          numeJudet = judetMap[codJudet.toLowerCase()] || codJudet.charAt(0).toUpperCase() + codJudet.slice(1);
-        }
-
-        // --- PARTEA 1: TEXTUL MESAJELOR ---
-        const regex = /MESAJ\s+(\d+)([\s\S]*?)(?=(?:MESAJ\s+\d+)|$)/gi;
-        let match;
-        let gasit_mesaje_multiple = false;
-
-        while ((match = regex.exec(text_complet)) !== null) {
-            gasit_mesaje_multiple = true;
-            let numar_mesaj = match[1];
-            let msg = match[2];
-            let msg_lower = msg.toLowerCase();
-
-            let highlightColor = 'var(--primary-text-color)';
-            if (msg_lower.includes('rosu') || msg_lower.includes('roșu')) highlightColor = '#e74c3c';
-            else if (msg_lower.includes('portocaliu')) highlightColor = '#e67e22';
-            else if (msg_lower.includes('galben')) highlightColor = '#f1c40f';
-
-            // Formatare Text
-            msg = msg.replace(/(\d{2})(Fenomene)/g, '$1<br>$2');
-            msg = msg.replace(/(viscol)(Zone)/g, '$1<br>$2');
-            msg = msg.replace(/(textului)/g, '$1<br>');
-            msg = msg.replace(/Interval de valabilitate:?/g, `<br>• <b style="color: ${highlightColor}">Interval:</b>`);
-            msg = msg.replace(/Fenomene(?: și zone)? vizate:?/g, `<br>• <b style="color: ${highlightColor}">Fenomene:</b>`);
-            msg = msg.replace(/Zone afectate:?/g, `<br>• <b style="color: ${highlightColor}">Zone:</b>`);
-            msg = msg.replace(/COD GALBEN/g, '<br><span style="background-color: #f1c40f; color: black; padding: 2px 4px; border-radius: 4px; font-weight: bold; font-size: 0.9em;">COD GALBEN</span>');
-            msg = msg.replace(/COD PORTOCALIU/g, '<br><span style="background-color: #e67e22; color: black; padding: 2px 4px; border-radius: 4px; font-weight: bold; font-size: 0.9em;">COD PORTOCALIU</span>');
-            msg = msg.replace(/COD ROSU/g, '<br><span style="background-color: #e74c3c; color: white; padding: 2px 4px; border-radius: 4px; font-weight: bold; font-size: 0.9em;">COD ROSU</span>')
-
-            const regexCuvinte = new RegExp(`(${numeJudet}[a-zĂÂÎȘȚăâîșț]*)`, 'gi');
-            msg = msg.replace(regexCuvinte, `<b style="background-color: rgba(255,255,255,0.1); color: ${highlightColor}; text-decoration: underline;">$&</b>`);
-
-            html_final += `<div style="margin-bottom: 15px; border-left: 4px solid ${highlightColor}; padding-left: 10px;">
-                              <div style="font-weight: 900; margin-bottom: 5px; color: ${highlightColor};">MESAJ ${numar_mesaj}</div>
-                              <div style="color: var(--primary-text-color); line-height: 1.4;">${msg}</div>
-                           </div>`;
-        }
-
-        // Fallback pentru mesaj unic
-        if (!gasit_mesaje_multiple) {
-           let highlightColor = 'var(--primary-text-color)';
-           let msg_lower = text_complet.toLowerCase();
-           if (msg_lower.includes('rosu') || msg_lower.includes('roșu')) highlightColor = '#e74c3c';
-           else if (msg_lower.includes('portocaliu')) highlightColor = '#e67e22';
-           else if (msg_lower.includes('galben')) highlightColor = '#f1c40f';
-           
-           html_final += `<div style="padding: 10px; border-left: 4px solid ${highlightColor}; color: var(--primary-text-color); line-height: 1.4;">${text_complet}</div>`;
-        }
-
-        // --- PARTEA 2: HĂRȚILE ACTIVE ---
-        let harti_gasite = 0;
-
-        // Reutilizăm numele județului din prima secțiune (deja extras corect)
-        // Nu mai redeclarăm variabila numeJudet aici
-
-        for (var i = 0; i < lista_ids.length; i++) {
-            let current_id = lista_ids[i];
-            let status = map_colors[current_id] || 'necunoscut';
-
-            // Verificăm dacă statusul este de alertă
-            if (['galben', 'portocaliu', 'rosu'].includes(status)) {
-                harti_gasite++;
-
-                var url_anm = 'https://www.meteoromania.ro/wp-content/plugins/meteo/harti/harta.svg.php?id_avertizare=' + current_id;
-                var timestamp = new Date().getTime();
-                var url_img = 'https://images.weserv.nl/?url=' + encodeURIComponent(url_anm) + '&v=' + timestamp;
-
-                let borderColor = '#f1c40f';
-                if (status == 'portocaliu') borderColor = '#e67e22';
-                if (status == 'rosu') borderColor = '#e74c3c';
-
-                html_final += `<div style="margin-top: 20px; text-align: center;">
-                                 <div style="font-size: 11px; font-weight: bold; color: ${borderColor}; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 1px;">
-                                    HARTĂ COD ${status.toUpperCase()} ${numeJudet.toUpperCase()}
-                                 </div>
-                                 <img src="${url_img}" style="width: 90%; display: block; margin: 0 auto; border-radius: 8px; border: 2px solid ${borderColor}; box-shadow: 0 4px 12px rgba(0,0,0,0.2);">
-                               </div>`;
-            }
-        }
-
-        return html_final;
-      ]]]
+    tap_action:
+      action: none
     styles:
       card:
-        - padding: 16px
-        - margin-top: 10px
-        - border-radius: 12px
-        - box-shadow: 0 4px 8px 0 rgba(0,0,0,0.2)
-      label:
-        - text-align: left
-        - font-size: 13px
-        - line-height: 1.5
-        - color: var(--secondary-text-color)
-        - white-space: normal
-    tap_action:
-      action: url
-      url_path: https://www.meteoromania.ro/avertizari/
+        - background-color: transparent
+        - box-shadow: none
+        - padding: 0px
+        - margin: 0px
+        - pointer-events: none
+      icon:
+        - width: 22px
+        - height: 22px
+        - color: |
+            [[[
+              const colorSensors = Object.keys(states).filter(key =>
+                key.startsWith('sensor.culoare_harta_') && states[key] && states[key].state !== 'unavailable'
+              );
+              const colorEntityId = colorSensors.length > 0 ? colorSensors[0] : null;
+              let status = colorEntityId ? states[colorEntityId].state : 'portocaliu';
+              const colorMap = { 'galben': '#f1c40f', 'portocaliu': '#e67e22', 'rosu': '#e74c3c', 'informare': '#3498db', 'verde': '#27ae60' };
+              return colorMap[status] || '#f39c12';
+            ]]]
+      name:
+        - font-weight: 900
+        - font-size: 16px
+        - text-transform: uppercase
+        - color: |
+            [[[
+              const colorSensors = Object.keys(states).filter(key =>
+                key.startsWith('sensor.culoare_harta_') && states[key] && states[key].state !== 'unavailable'
+              );
+              const colorEntityId = colorSensors.length > 0 ? colorSensors[0] : null;
+              let status = colorEntityId ? states[colorEntityId].state : 'portocaliu';
+              const colorMap = { 'galben': '#f1c40f', 'portocaliu': '#e67e22', 'rosu': '#e74c3c', 'informare': '#3498db', 'verde': '#27ae60' };
+              return colorMap[status] || '#f39c12';
+            ]]]
+  entities:
+    - type: custom:button-card
+      entity: sensor.mesaj_meteo_galati_2
+      show_name: false
+      show_label: true
+      show_state: false
+      show_icon: false
+      label: |
+        [[[
+          const mesajEntityId = 'sensor.mesaj_meteo_galati';
+          const mesajEntity = states[mesajEntityId];
+          const text_complet = (mesajEntity && mesajEntity.attributes) ? (mesajEntity.attributes.mesaj_complet || '') : '';
+          
+          const sensor_ids = states['sensor.anm_avertizare_id'];
+          let lista_ids = [];
+          if (sensor_ids && sensor_ids.state && !['0', 'unavailable', 'unknown'].includes(sensor_ids.state)) {
+              // Inversăm lista de ID-uri pentru a se potrivi cu ordinea mesajelor din text
+              lista_ids = sensor_ids.state.split(',').map(s => s.trim()).filter(s => s !== '').reverse();
+          }
+
+          const colorSensors = Object.keys(states).filter(key => key.startsWith('sensor.culoare_harta_'));
+          const sensor_colors = colorSensors.length > 0 ? states[colorSensors[0]] : null;
+          const map_colors = (sensor_colors && sensor_colors.attributes && sensor_colors.attributes.date_harti) ? sensor_colors.attributes.date_harti : {};
+
+          let numeJudet = 'Galați';
+          let html_final = '';
+          const regex = /MESAJ\s+(\d+)([\s\S]*?)(?=(?:MESAJ\s+\d+)|$)/gi;
+          let match;
+          
+          let ids_utilizate = [];
+
+          while ((match = regex.exec(text_complet)) !== null) {
+              let numar_mesaj = match[1];
+              let msg = match[2];
+              let msg_lower = msg.toLowerCase();
+
+              let colorKey = '';
+              let highlightColor = 'var(--primary-text-color)';
+              
+              if (msg_lower.includes('rosu') || msg_lower.includes('roșu')) { highlightColor = '#e74c3c'; colorKey = 'rosu'; }
+              else if (msg_lower.includes('portocaliu')) { highlightColor = '#e67e22'; colorKey = 'portocaliu'; }
+              else if (msg_lower.includes('galben')) { highlightColor = '#f1c40f'; colorKey = 'galben'; }
+
+              let msg_fmt = msg.replace(/(\d{2})(Fenomene)/g, '$1<br>$2')
+                       .replace(/(viscol)(Zone)/g, '$1<br>$2')
+                       .replace(/Interval de valabilitate:?/g, `<br>• <b style="color: ${highlightColor}">Interval:</b>`)
+                       .replace(/Fenomene(?: și zone)? vizate:?/g, `<br>• <b style="color: ${highlightColor}">Fenomene:</b>`)
+                       .replace(/Zone afectate:?/g, `<br>• <b style="color: ${highlightColor}">Zone:</b>`)
+                       .replace(/COD GALBEN/g, `<span style="background-color: #f1c40f; color: black; padding: 1px 3px; border-radius: 3px; font-weight: bold;">COD GALBEN</span>`)
+                       .replace(/COD PORTOCALIU/g, `<span style="background-color: #e67e22; color: black; padding: 1px 3px; border-radius: 3px; font-weight: bold;">COD PORTOCALIU</span>`)
+                       .replace(/COD ROSU/g, `<span style="background-color: #e74c3c; color: white; padding: 1px 3px; border-radius: 3px; font-weight: bold;">COD ROSU</span>`);
+
+              const regexJudet = new RegExp(`(${numeJudet}[a-zĂÂÎȘȚăâîșț]*)`, 'gi');
+              msg_fmt = msg_fmt.replace(regexJudet, `<b style="text-decoration: underline; color: ${highlightColor};">$&</b>`);
+
+              html_final += `<div style="margin-bottom: 15px; border-left: 4px solid ${highlightColor}; padding-left: 10px;">
+                              <div style="font-weight: 900; color: ${highlightColor}; margin-bottom: 5px;">MESAJ ${numar_mesaj}</div>
+                              <div style="line-height: 1.4;">${msg_fmt}</div>
+                             </div>`;
+
+              let id_gasit = lista_ids.find(id => map_colors[id] === colorKey && !ids_utilizate.includes(id));
+              
+              if (id_gasit && colorKey !== '') {
+                  ids_utilizate.push(id_gasit);
+                  let url_img = `https://images.weserv.nl/?url=${encodeURIComponent('https://www.meteoromania.ro/wp-content/plugins/meteo/harti/harta.svg.php?id_avertizare=' + id_gasit)}&v=${new Date().getTime()}`;
+                  html_final += `<div style="margin-bottom: 30px; padding: 0 10px; text-align: center;">
+                                   <div style="font-size: 11px; font-weight: bold; color: ${highlightColor}; margin-bottom: 5px; text-transform: uppercase;">Harta ${numeJudet} Mesaj ${numar_mesaj}</div>
+                                   <img src="${url_img}" style="width: 90%; display: block; margin: 0 auto; border-radius: 8px; border: 1.5px solid ${highlightColor}; box-shadow: 0 2px 8px rgba(0,0,0,0.15);">
+                                 </div>`;
+              }
+          }
+
+          return html_final || 'Nu sunt mesaje de afișat.';
+        ]]]
+      styles:
+        card:
+          - padding: 16px
+          - border-radius: 12px
+        label:
+          - text-align: left
+          - font-size: 13px
+          - white-space: normal
+      tap_action:
+        action: url
+        url_path: https://www.meteoromania.ro/avertizari/
