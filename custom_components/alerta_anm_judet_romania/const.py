@@ -3,6 +3,8 @@
 DOMAIN = "alerta_anm_judet_romania"
 API_URL = "https://www.meteoromania.ro/wp-json/meteoapi/v2/avertizari-generale"
 DEFAULT_SCAN_INTERVAL = 10  # minute
+CONF_AUTO_DOWNLOAD = "auto_download_maps"
+CONF_AUTO_SWITCH_MAP = "auto_switch_on_id_change"
 
 # Județele României cu abrevierile oficiale
 JUDETE = {

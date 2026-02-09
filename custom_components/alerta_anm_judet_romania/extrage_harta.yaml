@@ -1,0 +1,34 @@
+alias: Descarca Harti Avertizari Meteo ANM
+description: >-
+  Se declanseaza la schimbarea ID-urilor de avertizare, parcurge fiecare ID si
+  descarca harta corespunzatoare in folderul /config/www/
+triggers:
+  - entity_id:
+      - sensor.anm_avertizare_id
+    trigger: state
+conditions: []
+actions:
+  - variables:
+      id_list: >-
+        {% set state_value = trigger.to_state.state if trigger.to_state is
+        defined else states('sensor.anm_avertizare_id') %} {% if state_value and
+        state_value not in ['0', 'unavailable', 'unknown', 'None'] %}
+          {{ state_value.split(',') }}
+        {% else %}
+          []
+        {% endif %}
+  - if:
+      - condition: template
+        value_template: "{{ id_list | count > 0 }}"
+    then:
+      - repeat:
+          for_each: "{{ id_list }}"
+          sequence:
+            - data:
+                url: >-
+                  https://www.meteoromania.ro/wp-content/plugins/meteo/harti/harta.svg.php?id_avertizare={{
+                  repeat.item.strip() }}
+                filename: harta_anm_{{ repeat.item.strip() }}.svg
+                overwrite: true
+              action: downloader.download_file
+mode: single
