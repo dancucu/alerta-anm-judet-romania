@@ -1,0 +1,141 @@
+type: custom:fold-entity-row
+padding: 0
+clickable: true
+
+head:
+  type: custom:button-card
+  entity: sensor.avertizari_meteo_anm
+  name: AVERTIZARE METEO
+  icon: mdi:alert
+  show_name: true
+  show_icon: true
+  show_state: false
+
+  tap_action:
+    action: none
+
+  styles:
+    card:
+      - background-color: transparent
+      - box-shadow: none
+      - padding: 0px
+      - margin: 0px
+      - pointer-events: none
+
+    icon:
+      - width: 22px
+      - height: 22px
+      - color: |
+          [[[
+            const mesaj = states && states['sensor.mesaj_meteo_galati'] ? states['sensor.mesaj_meteo_galati'] : null;
+            const tip = mesaj && mesaj.attributes && mesaj.attributes.tip_cod ? ('' + mesaj.attributes.tip_cod).toLowerCase() : 'informare';
+
+            const map = {
+              galben: '#ffff55',
+              portocaliu: '#f09035',
+              rosu: '#ea3323',
+              informare: '#3498db',
+              verde: '#68d470'
+            };
+
+            return map[tip] || '#f39c12';
+          ]]]
+
+    name:
+      - font-weight: 900
+      - font-size: 16px
+      - text-transform: uppercase
+      - color: |
+          [[[
+            const mesaj = states && states['sensor.mesaj_meteo_galati'] ? states['sensor.mesaj_meteo_galati'] : null;
+            const tip = mesaj && mesaj.attributes && mesaj.attributes.tip_cod ? ('' + mesaj.attributes.tip_cod).toLowerCase() : 'informare';
+
+            const map = {
+              galben: '#ffff55',
+              portocaliu: '#f09035',
+              rosu: '#ea3323',
+              informare: '#3498db',
+              verde: '#68d470'
+            };
+
+            return map[tip] || '#f39c12';
+          ]]]
+
+entities:
+  - type: custom:button-card
+    entity: sensor.mesaj_meteo_galati
+    show_name: false
+    show_label: true
+    show_state: false
+    show_icon: false
+
+    label: |
+      [[[
+        try {
+          const mesaj = states && states['sensor.mesaj_meteo_galati'] ? states['sensor.mesaj_meteo_galati'] : null;
+          const harta = states && states['sensor.harta_meteo_activa'] ? states['sensor.harta_meteo_activa'] : null;
+
+          const attrs = mesaj && mesaj.attributes ? mesaj.attributes : {};
+          const raw = attrs.mesaj_complet || attrs.mesaj || (mesaj ? mesaj.state : '') || '';
+          const friendly = attrs.friendly_name || 'Mesaj Meteo';
+
+          const tip = attrs.tip_cod ? ('' + attrs.tip_cod).toLowerCase() : 'informare';
+          const colorMap = {
+            rosu: '#ea3323',
+            portocaliu: '#f09035',
+            galben: '#ffff55',
+            informare: '#3498db',
+            verde: '#68d470'
+          };
+          const color = colorMap[tip] || '#f39c12';
+
+          const text = ('' + raw)
+            .replace(/\n{3,}/g, '\n\n')
+            .trim()
+            .replace(/\n/g, '<br>') || 'Nu sunt mesaje de afișat.';
+
+          let html = `
+            <div style="margin-bottom:14px;border-left:4px solid ${color};padding-left:10px">
+              <div style="font-weight:900;color:${color};margin-bottom:5px">${friendly}</div>
+              <div style="line-height:1.4">${text}</div>
+            </div>
+          `;
+
+          const mapUrl = (() => {
+            if (harta && harta.state && !['unknown', 'unavailable', '0', 'None', 'none', 'null'].includes(('' + harta.state).trim())) {
+              return '' + harta.state;
+            }
+            if (harta && harta.attributes) {
+              if (harta.attributes.url_direct_anm) return '' + harta.attributes.url_direct_anm;
+              if (harta.attributes.url) return '' + harta.attributes.url;
+            }
+            return 'https://www.meteoromania.ro/images/avertizari/harta.png';
+          })();
+          if (mapUrl && !['unknown', 'unavailable', '0'].includes(mapUrl)) {
+            const separator = mapUrl.indexOf('?') === -1 ? '?' : '&';
+            const bust = `${mapUrl}${separator}v=${Date.now()}`;
+            html += `
+              <div style="margin-bottom:25px;text-align:center">
+                <img src="${bust}" style="width:90%;border-radius:8px;border:1.5px solid ${color}">
+              </div>
+            `;
+          }
+
+          return html || 'Nu sunt mesaje de afișat.';
+        } catch (e) {
+          return `Eroare afișare: ${e}`;
+        }
+      ]]]
+
+    styles:
+      card:
+        - padding: 16px
+        - border-radius: 12px
+      label:
+        - text-align: left
+        - font-size: 13px
+        - white-space: normal
+
+    tap_action:
+      action: url
+      url_path: https://www.meteoromania.ro/avertizari/

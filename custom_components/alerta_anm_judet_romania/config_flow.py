@@ -4,7 +4,7 @@ from homeassistant.core import callback
 import homeassistant.helpers.config_validation as cv
 import voluptuous as vol
 
-from .const import DOMAIN, JUDETE, DEFAULT_SCAN_INTERVAL
+from .const import DOMAIN, JUDETE, DEFAULT_SCAN_INTERVAL, CONF_AUTO_DOWNLOAD, CONF_AUTO_SWITCH_MAP
 
 
 class AlertaANMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -75,7 +75,15 @@ class AlertaANMOptionsFlow(config_entries.OptionsFlow):
             data_schema=vol.Schema({
                 vol.Optional(
                     "update_interval",
-                    default=self.config_entry.data.get("update_interval", DEFAULT_SCAN_INTERVAL)
+                    default=self.config_entry.options.get("update_interval", self.config_entry.data.get("update_interval", DEFAULT_SCAN_INTERVAL))
                 ): vol.All(vol.Coerce(int), vol.Range(min=5, max=60)),
+                vol.Optional(
+                    CONF_AUTO_DOWNLOAD,
+                    default=self.config_entry.options.get(CONF_AUTO_DOWNLOAD, False)
+                ): bool,
+                vol.Optional(
+                    CONF_AUTO_SWITCH_MAP,
+                    default=self.config_entry.options.get(CONF_AUTO_SWITCH_MAP, True)
+                ): bool,
             })
         )
