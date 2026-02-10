@@ -180,6 +180,8 @@ class ANMAlertSensor(Entity):
         parts = re.split(r'class=["\"]alerta_meteo_produsecontent[^"\"]*["\"]', html_text)
         if len(parts) <= 1:
             parts = re.findall(r'<div[^>]+alerta_meteo_produsecontent[^>]*>(.*?)</div>', html_text, re.S)
+        if len(parts) <= 1:
+            parts = re.findall(r'<div[^>]+alerta[^>]+>(.*?)</div>', html_text, re.S)
         if not parts or len(parts) <= 1:
             return alerts
 
@@ -195,6 +197,13 @@ class ANMAlertSensor(Entity):
             for block in counties_blocks:
                 counties.extend(re.findall(r"<strong>([^<]+)</strong>", block))
 
+            # Fallback: caută numele județelor în textul curățat dacă nu există strong-uri
+            text_block_clean = self._clean_html(part).lower()
+            if not counties:
+                for code, nume in JUDETE.items():
+                    if self._normalize_name(nume) in self._normalize_name(text_block_clean):
+                        counties.append(nume)
+
             msg_match = (
                 re.search(r"<tr><td[^>]*text-align:justify[^>]*>(.*?)</td>\s*</tr>", part, re.S)
                 or re.search(r"<td[^>]*>(.*?)</td>", part, re.S)
@@ -209,9 +218,15 @@ class ANMAlertSensor(Entity):
                     alerts.append({"judet": code, "culoare": color_val, "mesaj": msg_clean})
                 continue
 
+            seen = set()
             for county_name in counties:
                 key = county_name.strip().lower()
-                code = self._judet_name_to_code.get(key, county_name.strip())
+                norm_key = self._normalize_name(key)
+                code = self._judet_name_to_code.get(key, self._judet_name_to_code.get(norm_key, county_name.strip()))
+                dedup_key = (code, msg_clean)
+                if dedup_key in seen:
+                    continue
+                seen.add(dedup_key)
                 alerts.append({
                     "judet": code,
                     "culoare": color_val,
@@ -230,6 +245,18 @@ class ANMAlertSensor(Entity):
         text = text.replace("&nbsp;", " ").replace("&ndash;", "-")
         text = re.sub(r"\n\s*\n", "\n\n", text)
         return text.strip()
+
+    @staticmethod
+    def _normalize_name(text):
+        if not text:
+            return ""
+        normalized = text.lower()
+        normalized = normalized.replace("ş", "ș").replace("ţ", "ț")
+        normalized = normalized.replace("ă", "a").replace("â", "a").replace("î", "i")
+        normalized = normalized.replace("ș", "s").replace("ț", "t")
+        normalized = re.sub(r"[^a-z0-9 ]+", " ", normalized)
+        normalized = re.sub(r"\s+", " ", normalized).strip()
+        return normalized
 
     def _normalize_alerts(self, alerts):
         """Normalizează alertele; informările fără județ devin naționale (toate județele)."""

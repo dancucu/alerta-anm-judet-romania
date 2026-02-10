@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.1.4 - 2026-02-10
+- Parser HTML mai tolerant: detectează alertele chiar dacă div-urile nu au clasa standard, caută județele și în text (cu normalizare diacritice) și evită duplicatele; suportă în continuare "INFORMARE".
+
 ## 1.1.3 - 2026-02-10
 - Fallback HTML mai tolerant: detectează alertele chiar dacă structura de pe /avertizari/ are clase/TD-uri diferite; suportă culoarea "INFORMARE".
 
