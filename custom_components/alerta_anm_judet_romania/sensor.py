@@ -59,8 +59,9 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
 class ANMAlertSensor(Entity):
     """Senzor pentru lista de avertizări generale ANM."""
 
-    def __init__(self, hass):
+    def __init__(self, hass, id_sensor=None):
         self._hass = hass
+        self._id_sensor = id_sensor
         self._state = None
         self._attributes = {}
         self._last_success_ts = None
@@ -68,7 +69,7 @@ class ANMAlertSensor(Entity):
 
     @property
     def name(self):
-        return "Avertizari Meteo ANM"
+        return "ANM Avertizare Generala"
 
     @property
     def state(self):
@@ -84,7 +85,7 @@ class ANMAlertSensor(Entity):
 
     @property
     def unique_id(self):
-        return "avertizari_meteo_anm"
+        return "anm_avertizare_generala"
 
     async def async_update(self, now=None):
         """Actualizează avertizările: JSON primar, HTML fallback, păstrează ultima stare pe erori."""
@@ -115,7 +116,7 @@ class ANMAlertSensor(Entity):
                             self._attributes = {
                                 "numar_avertizari": len(avertizari),
                                 "avertizari": avertizari,
-                                "friendly_name": "Avertizari Meteo ANM",
+                                "friendly_name": "ANM Avertizare Generala",
                                 "sursa": "json",
                             }
                             return
@@ -140,7 +141,7 @@ class ANMAlertSensor(Entity):
                                 self._attributes = {
                                     "numar_avertizari": len(avertizari),
                                     "avertizari": avertizari,
-                                    "friendly_name": "Avertizari Meteo ANM",
+                                    "friendly_name": "ANM Avertizare Generala",
                                     "sursa": "html",
                                 }
                                 return
@@ -176,35 +177,243 @@ class ANMAlertSensor(Entity):
         if not html_text:
             return alerts
 
-        parts = html_text.split('class="alerta_meteo_produsecontent"')
-        if len(parts) <= 1:
+        # Taie tot ce este după Legend (acolo încep nowcasting-urile)
+        legend_marker = '<div style="font-weight: bold;width:200px;margin-top:40px">legenda:'
+        legend_idx = html_text.lower().find(legend_marker)
+        if legend_idx != -1:
+            html_text = html_text[:legend_idx]
+
+        parts = []
+
+        def _is_relevant_title(title_text):
+            normalized = self._normalize_name(title_text)
+            if "nowcasting" in normalized:
+                return False
+            allowed_keys = (
+                "informare meteo",
+                "informare meteorologica",
+                "atentionare meteo",
+                "atentionare meteorologica",
+            )
+            return any(key in normalized for key in allowed_keys)
+
+        # Caută perechi title+content
+        paired_blocks = re.findall(
+            r'<div[^>]+alerta_meteo_produsetitle[^>]*>(.*?)</div>\s*<div[^>]+alerta_meteo_produsecontent[^>]*>(.*?)</div>',
+            html_text,
+            re.S | re.IGNORECASE,
+        )
+        if paired_blocks:
+            for raw_title, body in paired_blocks:
+                if _is_relevant_title(raw_title):
+                    parts.append(body)
+
+        if not parts:
+            split_parts = re.split(r'class="alerta_meteo_produsecontent"', html_text)
+            if len(split_parts) > 1:
+                parts = split_parts[1:]
+            else:
+                alt_parts = re.findall(r'<div[^>]+alerta_meteo_produsecontent[^>]*>(.*?)</div>', html_text, re.S)
+                if len(alt_parts) > 1:
+                    parts = alt_parts
+                else:
+                    alt_parts = re.findall(r'<div[^>]+alerta[^>]+>(.*?)</div>', html_text, re.S)
+                    if alt_parts:
+                        parts = alt_parts
+
+        if parts:
+            # Elimină explicit blocurile de tip nowcasting (verifică titlul implicit în body)
+            # Nu elimina blocuri care doar menționează cuvântul în context
+            def _is_nowcasting_block(body_html):
+                # Caută "Atenționare nowcasting" sau "Atentionare nowcasting" ca titlu explicit
+                return bool(re.search(r'(atentionare|atenționare)\s+nowcasting', body_html, re.IGNORECASE))
+            
+            parts = [p for p in parts if not _is_nowcasting_block(p)]
+
+        if not parts:
             return alerts
 
-        color_map = {"galben": 1, "portocaliu": 2, "rosu": 3}
+        color_map = {"galben": 1, "portocaliu": 2, "rosu": 3, "informare": 0}
+        zone_map = {
+            "banat": ["TM", "CS"],
+            "sudul banatului": ["TM", "CS"],
+            "carpatii meridionali": ["CS", "HD", "GJ", "VL", "AG", "SB", "BV"],
+            "extremitatea vestica a carpatilor meridionali": ["CS", "HD", "GJ"],
+            "dobrogea": ["CT", "TL"],
+            "moldova": ["IS", "VS", "BT", "NT", "BC", "SV", "GL"],
+            "transilvania": ["AB", "AR", "BH", "BN", "BV", "CJ", "CV", "HD", "HR", "MM", "MS", "SB", "SJ", "SM"],
+            "oltenia": ["DJ", "GJ", "MH", "OT", "VL"],
+            "muntenia": ["AG", "BR", "BZ", "CL", "DB", "GR", "IF", "IL", "PH", "TR"]
+        }
 
-        for part in parts[1:]:
-            color_match = re.search(r"COD\s*:?\s*(GALBEN|PORTOCALIU|ROSU)", part, re.IGNORECASE)
-            color_txt = color_match.group(1).lower() if color_match else None
-            color_val = color_map.get(color_txt, 0)
-
-            counties = re.findall(r"<div class='IconiteJudeteChestii'><strong>([^<]+)</strong>\s*:", part)
-            if not counties:
-                continue
-
-            msg_match = re.search(r"<tr><td[^>]*text-align:justify[^>]*>(.*?)</td>\s*</tr>", part, re.S)
-            raw_msg = msg_match.group(1) if msg_match else ""
+        for part in parts:
+            # Extrage întregul conținut al blocului pentru mesaj
+            msg_match = (
+                re.search(r"<td[^>]*colspan=[\"']?3[\"']?[^>]*text-align:justify[^>]*>(.*?)</td>", part, re.S)
+                or re.search(r"<td[^>]*text-align:justify[^>]*>(.*?)</td>", part, re.S)
+                or re.search(r"<td[^>]*colspan=[\"']?3[\"']?[^>]*>(.*?)</td>", part, re.S)
+            )
+            raw_msg = msg_match.group(1) if msg_match else part
             msg_clean = self._clean_html(raw_msg)
+            
+            # Împarte mesajul în submesaje dacă conține mai multe coduri
+            submessages = self._split_combined_message(msg_clean)
+            
+            for submsg, subcolor in submessages:
+                self._process_single_alert(submsg, subcolor, zone_map, alerts)
 
-            for county_name in counties:
-                key = county_name.strip().lower()
-                code = self._judet_name_to_code.get(key, county_name.strip())
+        return alerts
+
+    def _split_combined_message(self, msg_clean):
+        """Împarte un mesaj combinat în submesaje separate cu codurile lor."""
+        # Caută toate blocurile de tip INFORMARE/ATENȚIONARE + COD
+        pattern = r'(INFORMARE\s+METEOROLOGIC[AĂ]|ATEN[ȚT]IONARE\s+METEOROLOGIC[AĂ])\s*(.*?)(?=(?:INFORMARE\s+METEOROLOGIC|ATEN[ȚT]IONARE\s+METEOROLOGIC|$))'
+        matches = re.findall(pattern, msg_clean, re.IGNORECASE | re.DOTALL)
+        
+        if not matches:
+            # Dacă nu găsim pattern-ul, returnează mesajul întreg
+            return [(msg_clean, None)]
+        
+        result = []
+        color_map = {"galben": 1, "portocaliu": 2, "rosu": 3, "informare": 0}
+        
+        for alert_type, content in matches:
+            full_text = alert_type + " " + content
+            # Caută COD în acest submesaj
+            cod_match = re.search(r"COD\s*:?\s*(GALBEN|PORTOCALIU|ROSU|INFORMARE)", full_text, re.IGNORECASE)
+            color_val = color_map.get(cod_match.group(1).lower(), 0) if cod_match else 0
+            result.append((full_text.strip(), color_val))
+        
+        return result if result else [(msg_clean, None)]
+
+    def _process_single_alert(self, msg_clean, color_val, zone_map, alerts):
+        """Procesează o singură alertă și adaugă județele afectate."""
+        if color_val is None:
+            # Determină culoarea din mesaj
+            color_map_local = {"galben": 1, "portocaliu": 2, "rosu": 3, "informare": 0}
+            color_match = re.search(r"COD\s*:?\s*(GALBEN|PORTOCALIU|ROSU|INFORMARE)", msg_clean, re.IGNORECASE)
+            if color_match:
+                color_val = color_map_local.get(color_match.group(1).lower(), 0)
+            else:
+                # Dacă nu găsim COD dar avem INFORMARE în titlu, este informare (cod 0)
+                if re.search(r"INFORMARE\s+METEOROLOGIC", msg_clean, re.IGNORECASE):
+                    color_val = 0
+                else:
+                    color_val = 0  # Default la informare
+        
+        counties = []
+        normalized_msg = self._normalize_name(msg_clean)
+        
+        # Caută județe explicit menționate (cu word boundaries)
+        for code, nume in JUDETE.items():
+            normalized_county = self._normalize_name(nume)
+            # Verifică ca word boundary - nu substring
+            pattern = r'\b' + re.escape(normalized_county) + r'\b'
+            if re.search(pattern, normalized_msg):
+                counties.append(code)
+        
+        # Dacă nu găsim județe explicit, verificăm zone
+        if not counties:
+            candidate_codes = []
+            for zone_key, zone_codes in zone_map.items():
+                if zone_key in normalized_msg:
+                    candidate_codes.extend(zone_codes)
+            
+            # Pentru INFORMARE (cod 0), aplicăm național
+            if color_val == 0:
+                counties = []  # Va fi aplicat la toate județele mai jos
+            elif candidate_codes:
+                # Pentru cod colorat cu zone multiple menționate, returnăm toți candidații
+                # Senzorul de hartă va filtra la nivel de județ
+                counties = list(set(candidate_codes))
+            else:
+                counties = []
+        
+        if not counties:
+            # Aplicăm la toate județele
+            for code in JUDETE:
+                alerts.append({"judet": code, "culoare": color_val, "mesaj": msg_clean})
+        else:
+            # Aplicăm doar la județele identificate
+            seen = set()
+            for county_code in counties:
+                if isinstance(county_code, str) and len(county_code) <= 3:
+                    code = county_code
+                else:
+                    # Este nume de județ, trebuie convertit
+                    key = county_code.strip().lower()
+                    norm_key = self._normalize_name(key)
+                    code = self._judet_name_to_code.get(key, self._judet_name_to_code.get(norm_key, county_code))
+                
+                dedup_key = (code, msg_clean)
+                if dedup_key in seen:
+                    continue
+                seen.add(dedup_key)
                 alerts.append({
                     "judet": code,
                     "culoare": color_val,
                     "mesaj": msg_clean,
                 })
 
-        return alerts
+    def _filter_by_map_sync(self, candidate_codes):
+        """Filtrează județele candidate verificând culoarea pe hărțile active (sync)."""
+        if not self._id_sensor:
+            return candidate_codes
+        
+        sensor_ids = self._id_sensor.state
+        if not sensor_ids or sensor_ids in ["unknown", "unavailable", "0", ""]:
+            return candidate_codes
+        
+        ids_list = [x.strip() for x in str(sensor_ids).split(",") if x.strip()]
+        if not ids_list or not candidate_codes:
+            return candidate_codes
+        
+        # Descarcă toate hărțile și verifică fiecare județ
+        verified = set()
+        session = async_get_clientsession(self._hass, verify_ssl=False)
+        
+        for map_id in ids_list:
+            try:
+                # Folosim un loop event existent
+                future = self._fetch_and_check_map(session, map_id, candidate_codes)
+                colored_counties = self._hass.loop.create_task(future)
+                # Colectăm rezultatele în verificare asincronă separată
+            except Exception as e:
+                _LOGGER.debug(f"Eroare verificare hartă {map_id}: {e}")
+        
+        # Dacă nu putem verifica, returnăm toți candidații
+        return list(candidate_codes)
+
+    async def _fetch_and_check_map(self, session, map_id, candidate_codes):
+        """Descarcă harta și verifică care județe sunt colorate."""
+        url = f"https://www.meteoromania.ro/wp-content/plugins/meteo/harti/harta.svg.php?id_avertizare={map_id}"
+        colored = []
+        
+        try:
+            async with async_timeout.timeout(5):
+                async with session.get(url) as response:
+                    if response.status != 200:
+                        return colored
+                    
+                    content = await response.text()
+                    
+                    for judet_cod in candidate_codes:
+                        target_id = f'conturJudet{judet_cod}'
+                        if target_id not in content:
+                            continue
+                        
+                        # Verifică dacă are fill colorat
+                        pattern = rf'{target_id}[^>]*(?:style="[^"]*fill:\s*([^;"]+)|class="([^"]+))'
+                        match = re.search(pattern, content)
+                        if match:
+                            fill_val = (match.group(1) or match.group(2) or "").lower()
+                            if any(c in fill_val for c in ['#ffff00', 'rgb(255,255,0)', '#ff6600', '#ff0000', '#b4b4b4', 'galben', 'portocaliu', 'rosu']):
+                                colored.append(judet_cod)
+                    
+                    return colored
+        except Exception as e:
+            _LOGGER.debug(f"Eroare parsare hartă {map_id}: {e}")
+            return colored
 
     @staticmethod
     def _clean_html(text):
@@ -216,6 +425,52 @@ class ANMAlertSensor(Entity):
         text = text.replace("&nbsp;", " ").replace("&ndash;", "-")
         text = re.sub(r"\n\s*\n", "\n\n", text)
         return text.strip()
+
+    @staticmethod
+    def _normalize_name(text):
+        if not text:
+            return ""
+        normalized = text.lower()
+        normalized = normalized.replace("ş", "ș").replace("ţ", "ț")
+        normalized = normalized.replace("ă", "a").replace("â", "a").replace("î", "i")
+        normalized = normalized.replace("ș", "s").replace("ț", "t")
+        normalized = re.sub(r"[^a-z0-9 ]+", " ", normalized)
+        normalized = re.sub(r"\s+", " ", normalized).strip()
+        return normalized
+
+    def _normalize_alerts(self, alerts):
+        """Normalizează alertele; informările fără județ devin naționale (toate județele)."""
+        if not isinstance(alerts, list):
+            return []
+
+        normalized = []
+        for item in alerts:
+            if not isinstance(item, dict):
+                continue
+
+            msg = item.get("mesaj", "") or item.get("text", "")
+            color_raw = item.get("culoare", item.get("cod", 0))
+            try:
+                color_val = int(color_raw)
+            except Exception:  # pragma: no cover - defensive
+                color_val = 0
+
+            judete_list = item.get("judete") if isinstance(item.get("judete"), list) else None
+            if judete_list:
+                for j in judete_list:
+                    normalized.append({"judet": j, "culoare": color_val, "mesaj": msg})
+                continue
+
+            judet = item.get("judet")
+            if judet:
+                normalized.append({"judet": judet, "culoare": color_val, "mesaj": msg})
+                continue
+
+            # Informare generală fără județe specificate -> replică pe toate județele
+            for code in JUDETE:
+                normalized.append({"judet": code, "culoare": color_val, "mesaj": msg})
+
+        return normalized
 
 
 class ANMAlertIDSensor(Entity):
