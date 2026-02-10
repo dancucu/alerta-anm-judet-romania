@@ -1,0 +1,53 @@
+"""Constante pentru integrarea Alertă ANM Județ România."""
+
+DOMAIN = "alerta_anm_judet_romania"
+API_URL = "https://www.meteoromania.ro/wp-json/meteoapi/v2/avertizari-generale"
+DEFAULT_SCAN_INTERVAL = 10  # minute
+CONF_AUTO_DOWNLOAD = "auto_download_maps"
+CONF_AUTO_SWITCH_MAP = "auto_switch_on_id_change"
+
+# Județele României cu abrevierile oficiale
+JUDETE = {
+    "AB": "Alba",
+    "AR": "Arad",
+    "AG": "Argeș",
+    "BC": "Bacău",
+    "BH": "Bihor",
+    "BN": "Bistrița-Năsăud",
+    "BT": "Botoșani",
+    "BR": "Brăila",
+    "BV": "Brașov",
+    "B": "București",
+    "BZ": "Buzău",
+    "CL": "Călărași",
+    "CS": "Caraș-Severin",
+    "CJ": "Cluj",
+    "CT": "Constanța",
+    "CV": "Covasna",
+    "DB": "Dâmbovița",
+    "DJ": "Dolj",
+    "GL": "Galați",
+    "GR": "Giurgiu",
+    "GJ": "Gorj",
+    "HR": "Harghita",
+    "HD": "Hunedoara",
+    "IL": "Ialomița",
+    "IS": "Iași",
+    "IF": "Ilfov",
+    "MM": "Maramureș",
+    "MH": "Mehedinți",
+    "MS": "Mureș",
+    "NT": "Neamț",
+    "OT": "Olt",
+    "PH": "Prahova",
+    "SJ": "Sălaj",
+    "SM": "Satu Mare",
+    "SB": "Sibiu",
+    "SV": "Suceava",
+    "TR": "Teleorman",
+    "TM": "Timiș",
+    "TL": "Tulcea",
+    "VL": "Vâlcea",
+    "VS": "Vaslui",
+    "VN": "Vrancea"
+}
