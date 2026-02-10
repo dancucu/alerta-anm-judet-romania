@@ -177,20 +177,29 @@ class ANMAlertSensor(Entity):
         if not html_text:
             return alerts
 
-        parts = html_text.split('class="alerta_meteo_produsecontent"')
+        parts = re.split(r'class=["\"]alerta_meteo_produsecontent[^"\"]*["\"]', html_text)
         if len(parts) <= 1:
+            parts = re.findall(r'<div[^>]+alerta_meteo_produsecontent[^>]*>(.*?)</div>', html_text, re.S)
+        if not parts or len(parts) <= 1:
             return alerts
 
-        color_map = {"galben": 1, "portocaliu": 2, "rosu": 3}
+        color_map = {"galben": 1, "portocaliu": 2, "rosu": 3, "informare": 0}
 
         for part in parts[1:]:
-            color_match = re.search(r"COD\s*:?\s*(GALBEN|PORTOCALIU|ROSU)", part, re.IGNORECASE)
+            color_match = re.search(r"COD\s*:?\s*(GALBEN|PORTOCALIU|ROSU|INFORMARE)", part, re.IGNORECASE)
             color_txt = color_match.group(1).lower() if color_match else None
             color_val = color_map.get(color_txt, 0)
 
-            counties = re.findall(r"<div class='IconiteJudeteChestii'><strong>([^<]+)</strong>\s*:", part)
+            counties_blocks = re.findall(r"IconiteJudeteChestii[^>]*>(.*?)</div>", part, re.S)
+            counties = []
+            for block in counties_blocks:
+                counties.extend(re.findall(r"<strong>([^<]+)</strong>", block))
 
-            msg_match = re.search(r"<tr><td[^>]*text-align:justify[^>]*>(.*?)</td>\s*</tr>", part, re.S)
+            msg_match = (
+                re.search(r"<tr><td[^>]*text-align:justify[^>]*>(.*?)</td>\s*</tr>", part, re.S)
+                or re.search(r"<td[^>]*>(.*?)</td>", part, re.S)
+                or re.search(r"<p[^>]*>(.*?)</p>", part, re.S)
+            )
             raw_msg = msg_match.group(1) if msg_match else ""
             msg_clean = self._clean_html(raw_msg)
 
