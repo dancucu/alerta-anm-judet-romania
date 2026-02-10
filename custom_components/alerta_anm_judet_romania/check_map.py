@@ -14,19 +14,19 @@ def normalize_color(color_str):
     s = color_str.lower().replace(" ", "")
     
     # Culori AVERTIZARE
-    if '#ffff00' in s or 'rgb(255,255,0)' in s:
+    if '#ffff00' in s or '#ff0' in s or 'rgb(255,255,0)' in s:
         return 'galben'
-    if '#ff6600' in s or '#ff9900' in s or '#e67e22' in s or 'rgb(255,102,0)' in s or 'rgb(255,127,0)' in s:
+    if '#ff6600' in s or '#ff9900' in s or '#e67e22' in s or '#f60' in s or '#f90' in s or 'rgb(255,102,0)' in s or 'rgb(255,127,0)' in s:
         return 'portocaliu'
-    if '#ff0000' in s or 'rgb(255,0,0)' in s:
+    if '#ff0000' in s or '#f00' in s or 'rgb(255,0,0)' in s:
         return 'rosu'
     
-    # Culori INFORMARE (Gri-uri folosite de ANM)
-    if '#b4b4b4' in s or '#cccccc' in s or '#999999' in s or 'rgb(180,180,180)' in s:
+    # Culori INFORMARE (Gri-uri folosite de ANM - inclusiv formatul scurt)
+    if '#b4b4b4' in s or '#cccccc' in s or '#ccc' in s or '#999999' in s or '#999' in s or 'rgb(180,180,180)' in s:
         return 'informare'
     
     # Dacă e 'none' sau alb, e verde (fără nimic)
-    if 'none' in s or '#ffffff' in s or 'rgb(255,255,255)' in s:
+    if 'none' in s or '#ffffff' in s or '#fff' in s or 'rgb(255,255,255)' in s:
         return 'verde'
     
     return None
