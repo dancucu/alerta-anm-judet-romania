@@ -100,7 +100,8 @@ class ANMAlertSensor(Entity):
                     async with session.get(JSON_URL) as response:
                         if response.status == 200:
                             data = await response.json()
-                            avertizari = data.get("avertizari", []) if isinstance(data, dict) else []
+                            avertizari_raw = data.get("avertizari", []) if isinstance(data, dict) else []
+                            avertizari = self._normalize_alerts(avertizari_raw)
 
                             if not avertizari and prev_attrs.get("avertizari"):
                                 _LOGGER.warning(
@@ -133,7 +134,7 @@ class ANMAlertSensor(Entity):
                         html_ok = resp_html.status == 200
                         html_text = await resp_html.text() if html_ok else ""
                         if html_ok:
-                            avertizari = self._parse_html_alerts(html_text)
+                            avertizari = self._normalize_alerts(self._parse_html_alerts(html_text))
                             if avertizari or html_text:
                                 self._state = "alerta" if avertizari else "liniste"
                                 self._last_success_ts = int(asyncio.get_event_loop().time())
@@ -188,12 +189,16 @@ class ANMAlertSensor(Entity):
             color_val = color_map.get(color_txt, 0)
 
             counties = re.findall(r"<div class='IconiteJudeteChestii'><strong>([^<]+)</strong>\s*:", part)
-            if not counties:
-                continue
 
             msg_match = re.search(r"<tr><td[^>]*text-align:justify[^>]*>(.*?)</td>\s*</tr>", part, re.S)
             raw_msg = msg_match.group(1) if msg_match else ""
             msg_clean = self._clean_html(raw_msg)
+
+            if not counties:
+                # Informare națională: aplică tuturor județelor
+                for code in JUDETE:
+                    alerts.append({"judet": code, "culoare": color_val, "mesaj": msg_clean})
+                continue
 
             for county_name in counties:
                 key = county_name.strip().lower()
@@ -216,6 +221,40 @@ class ANMAlertSensor(Entity):
         text = text.replace("&nbsp;", " ").replace("&ndash;", "-")
         text = re.sub(r"\n\s*\n", "\n\n", text)
         return text.strip()
+
+    def _normalize_alerts(self, alerts):
+        """Normalizează alertele; informările fără județ devin naționale (toate județele)."""
+        if not isinstance(alerts, list):
+            return []
+
+        normalized = []
+        for item in alerts:
+            if not isinstance(item, dict):
+                continue
+
+            msg = item.get("mesaj", "") or item.get("text", "")
+            color_raw = item.get("culoare", item.get("cod", 0))
+            try:
+                color_val = int(color_raw)
+            except Exception:  # pragma: no cover - defensive
+                color_val = 0
+
+            judete_list = item.get("judete") if isinstance(item.get("judete"), list) else None
+            if judete_list:
+                for j in judete_list:
+                    normalized.append({"judet": j, "culoare": color_val, "mesaj": msg})
+                continue
+
+            judet = item.get("judet")
+            if judet:
+                normalized.append({"judet": judet, "culoare": color_val, "mesaj": msg})
+                continue
+
+            # Informare generală fără județe specificate -> replică pe toate județele
+            for code in JUDETE:
+                normalized.append({"judet": code, "culoare": color_val, "mesaj": msg})
+
+        return normalized
 
 
 class ANMAlertIDSensor(Entity):
@@ -366,7 +405,7 @@ class ANMMessageSensor(Entity):
 
         self._state = "alerta"
         max_code = max([int(a.get("culoare", 0)) for a in gl_list])
-        tip_cod_map = {3: "Rosu", 2: "Portocaliu", 1: "Galben", 0: "Verde"}
+        tip_cod_map = {3: "Rosu", 2: "Portocaliu", 1: "Galben", 0: "Informare"}
         tip_cod = tip_cod_map.get(max_code, "Verde")
 
         mesaje = []

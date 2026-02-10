@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.1.2 - 2026-02-10
+- Informările fără județe sau cod (ex. „toată țara”) se aplică automat tuturor județelor și apar în senzorii de mesaj.
+- Tipul 0 este etichetat ca „Informare” în `sensor.mesaj_meteo_{judet}`.
+
 ## 1.1.1 - 2026-02-10
 - Renamed `sensor.anm_avertizare_generala` to `sensor.avertizari_meteo_anm` (breaking: entity_id changes; reselect in dashboards/automations).
 

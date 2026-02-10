@@ -14,6 +14,8 @@ Integrare Home Assistant pentru alertele meteorologice ANM (Administrația Nați
 - `sensor.descarcare_harti_anm` - Descarcă automat hărțile SVG în `/config/www`
 - `sensor.culoare_harta_{judet}` - Culoare detectată pe hartă (galben/portocaliu/roșu/informare)
 
+**Informări naționale:** alertele fără cod/județe (ex. „toată țara”) sunt afișate acum ca „Informare” în toți senzorii de județ.
+
 ✅ **Configurare Simplă:**
 - Selector de județ cu toate 43 de opțiuni (42 județe + București)
 - Interval de actualizare configurable (5-60 minute)
