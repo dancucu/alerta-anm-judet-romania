@@ -8,7 +8,7 @@ Integrare Home Assistant pentru alertele meteorologice ANM (Administrația Nați
 ## Caracteristici
 
 ✅ **5 Senzori Automați:**
-- `sensor.anm_avertizare_generala` - Status alertelor (JSON + fallback HTML)
+- `sensor.avertizari_meteo_anm` - Status alertelor (JSON + fallback HTML)
 - `sensor.anm_avertizare_id` - ID-uri hărți active din pagina HTML
 - `sensor.mesaj_meteo_{judet}` - Mesaj alert filtrat pe județ
 - `sensor.descarcare_harti_anm` - Descarcă automat hărțile SVG în `/config/www`

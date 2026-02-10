@@ -68,7 +68,7 @@ class ANMAlertSensor(Entity):
 
     @property
     def name(self):
-        return "ANM Avertizare Generala"
+        return "Avertizari Meteo ANM"
 
     @property
     def state(self):
@@ -84,7 +84,7 @@ class ANMAlertSensor(Entity):
 
     @property
     def unique_id(self):
-        return "anm_avertizare_generala"
+        return "avertizari_meteo_anm"
 
     async def async_update(self, now=None):
         """Actualizează avertizările: JSON primar, HTML fallback, păstrează ultima stare pe erori."""
@@ -115,7 +115,7 @@ class ANMAlertSensor(Entity):
                             self._attributes = {
                                 "numar_avertizari": len(avertizari),
                                 "avertizari": avertizari,
-                                "friendly_name": "ANM Avertizare Generala",
+                                "friendly_name": "Avertizari Meteo ANM",
                                 "sursa": "json",
                             }
                             return
@@ -140,7 +140,7 @@ class ANMAlertSensor(Entity):
                                 self._attributes = {
                                     "numar_avertizari": len(avertizari),
                                     "avertizari": avertizari,
-                                    "friendly_name": "ANM Avertizare Generala",
+                                    "friendly_name": "Avertizari Meteo ANM",
                                     "sursa": "html",
                                 }
                                 return
