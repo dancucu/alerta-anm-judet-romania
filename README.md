@@ -8,11 +8,11 @@ Integrare Home Assistant pentru alertele meteorologice ANM (Administrația Nați
 ## Caracteristici
 
 ✅ **5 Senzori Automați:**
-- `sensor.avertizari_meteo_anm` - Status alertelor (active/inactive)
-- `sensor.anm_avertizare_id` - ID-uri hărți active
+- `sensor.avertizari_meteo_anm` - Status alertelor (JSON + fallback HTML)
+- `sensor.anm_avertizare_id` - ID-uri hărți active din pagina HTML
 - `sensor.mesaj_meteo_{judet}` - Mesaj alert filtrat pe județ
-- `sensor.harta_meteo_activa` - URL hartă proxy
-- `sensor.culoare_harta_{judet}` - Culoare detectată (galben/portocaliu/roșu)
+- `sensor.descarcare_harti_anm` - Descarcă automat hărțile SVG în `/config/www`
+- `sensor.culoare_harta_{judet}` - Culoare detectată pe hartă (galben/portocaliu/roșu/informare)
 
 ✅ **Configurare Simplă:**
 - Selector de județ cu toate 43 de opțiuni (42 județe + București)

@@ -1,8 +1,8 @@
 {
   "domain": "alerta_anm_judet_romania",
   "name": "Alertă ANM Județ România",
-  "version": "1.0.7",
-  "documentation": "https://github.com/yourusername/alerta_anm_judet",
+  "version": "1.1.1",
+  "documentation": "https://github.com/dancucu/alerta-anm-judet-romania",
   "requirements": [],
   "codeowners": [],
   "config_flow": true,
