@@ -1,7 +1,7 @@
 type: conditional
 conditions:
   - condition: state
-    entity: sensor.mesaj_meteo_galati
+    entity: sensor.mesaj_meteo_caras_severin
     state: alerta
 card:
   type: custom:fold-entity-row
@@ -29,13 +29,25 @@ card:
         - height: 22px
         - color: |
             [[[
-              const colorSensors = Object.keys(states).filter(key =>
-                key.startsWith('sensor.culoare_harta_') && states[key] && states[key].state !== 'unavailable'
-              );
-              const colorEntityId = colorSensors.length > 0 ? colorSensors[0] : null;
-              let status = colorEntityId ? states[colorEntityId].state : 'portocaliu';
-              const colorMap = { 'galben': '#ffff55', 'portocaliu': '#f09035', 'rosu': '#ea3323', 'informare': '#3498db', 'verde': '#68d470' };
-              return colorMap[status] || '#f39c12';
+              // Determină culoarea celui mai grav cod din mesaj
+              const mesajEntityId = 'sensor.mesaj_meteo_caras_severin';
+              const mesajEntity = states[mesajEntityId];
+              const text_complet = (mesajEntity && mesajEntity.attributes) ? (mesajEntity.attributes.mesaj_complet || '') : '';
+              
+              let maxSeverity = -1;
+              let iconColor = '#3498db'; // Default albastru
+              
+              // Severity mapping: rosu=3, portocaliu=2, galben=1, informare=0
+              if (text_complet.toLowerCase().includes('rosu') || text_complet.toLowerCase().includes('roșu')) {
+                maxSeverity = 3;
+                iconColor = '#ea3323';
+              } else if (text_complet.toLowerCase().includes('portocaliu')) {
+                if (maxSeverity < 2) { maxSeverity = 2; iconColor = '#f09035'; }
+              } else if (text_complet.toLowerCase().includes('galben')) {
+                if (maxSeverity < 1) { maxSeverity = 1; iconColor = '#ffde07'; }
+              }
+              
+              return iconColor;
             ]]]
       name:
         - font-weight: 900
@@ -43,17 +55,29 @@ card:
         - text-transform: uppercase
         - color: |
             [[[
-              const colorSensors = Object.keys(states).filter(key =>
-                key.startsWith('sensor.culoare_harta_') && states[key] && states[key].state !== 'unavailable'
-              );
-              const colorEntityId = colorSensors.length > 0 ? colorSensors[0] : null;
-              let status = colorEntityId ? states[colorEntityId].state : 'portocaliu';
-              const colorMap = { 'galben': '#ffff55', 'portocaliu': '#f09035', 'rosu': '#ea3323', 'informare': '#3498db', 'verde': '#68d470' };
-              return colorMap[status] || '#f39c12';
+              // Determină culoarea celui mai grav cod din mesaj
+              const mesajEntityId = 'sensor.mesaj_meteo_caras_severin';
+              const mesajEntity = states[mesajEntityId];
+              const text_complet = (mesajEntity && mesajEntity.attributes) ? (mesajEntity.attributes.mesaj_complet || '') : '';
+              
+              let maxSeverity = -1;
+              let titleColor = '#3498db'; // Default albastru
+              
+              // Severity mapping: rosu=3, portocaliu=2, galben=1, informare=0
+              if (text_complet.toLowerCase().includes('rosu') || text_complet.toLowerCase().includes('roșu')) {
+                maxSeverity = 3;
+                titleColor = '#ea3323';
+              } else if (text_complet.toLowerCase().includes('portocaliu')) {
+                if (maxSeverity < 2) { maxSeverity = 2; titleColor = '#f09035'; }
+              } else if (text_complet.toLowerCase().includes('galben')) {
+                if (maxSeverity < 1) { maxSeverity = 1; titleColor = '#ffde07'; }
+              }
+              
+              return titleColor;
             ]]]
   entities:
     - type: custom:button-card
-      entity: sensor.mesaj_meteo_galati
+      entity: sensor.mesaj_meteo_caras_severin
       show_name: false
       show_label: true
       show_state: false
@@ -61,7 +85,7 @@ card:
       label: |
         [[[
           // --- CONFIGURARE INIȚIALĂ ---
-          const mesajEntityId = 'sensor.mesaj_meteo_galati';
+          const mesajEntityId = 'sensor.mesaj_meteo_caras_severin';
           const mesajEntity = states[mesajEntityId];
           const text_complet = (mesajEntity && mesajEntity.attributes) ? (mesajEntity.attributes.mesaj_complet || '') : '';
 
@@ -123,7 +147,8 @@ card:
               let highlightColor = '#3498db'; // Albastru pentru informare (default)
               if (msg_lower.includes('rosu') || msg_lower.includes('roșu')) { highlightColor = '#ea3323'; colorKey = 'rosu'; }
               else if (msg_lower.includes('portocaliu')) { highlightColor = '#f09035'; colorKey = 'portocaliu'; }
-              else if (msg_lower.includes('galben')) { highlightColor = '#ffff55'; colorKey = 'galben'; }
+              else if (msg_lower.includes('galben')) { highlightColor = '#ffde07'; colorKey = 'galben'; }
+              else if (isGeneral) { colorKey = 'informare'; } // Marchează informările pentru afișare hartă
 
               // Formatarea textului mesajului
               let msg_fmt = msg.replace(/COD GALBEN|COD PORTOCALIU|COD ROSU/gi, '')
@@ -141,7 +166,7 @@ card:
               html_final += `<div style="margin-bottom: 15px; border-left: 4px solid ${highlightColor}; padding-left: 10px;">
                               <div style="font-weight: 900; color: ${highlightColor}; margin-bottom: 5px; text-transform: uppercase;">
                                 ${titlu_afisat.replace(/COD/gi, '')}
-                                ${colorKey === 'galben' ? '<span style="background-color: #ffff55; color: black; padding: 1px 3px; border-radius: 3px; font-weight: bold;">COD GALBEN</span>' : ''}
+                                ${colorKey === 'galben' ? '<span style="background-color: #ffde07; color: black; padding: 1px 3px; border-radius: 3px; font-weight: bold;">COD GALBEN</span>' : ''}
                                 ${colorKey === 'portocaliu' ? '<span style="background-color: #f09035; color: black; padding: 1px 3px; border-radius: 3px; font-weight: bold;">COD PORTOCALIU</span>' : ''}
                                 ${colorKey === 'rosu' ? '<span style="background-color: #ea3323; color: white; padding: 1px 3px; border-radius: 3px; font-weight: bold;">COD ROȘU</span>' : ''}
                               </div>
@@ -149,17 +174,20 @@ card:
                              </div>`;
 
               // --- LOGICA PENTRU AFIȘARE HARTĂ ---
-              // Găsește un ID de avertizare nefolosit care corespunde culorii mesajului
-              let id_gasit = lista_ids.find(id => map_colors[id] === colorKey && !ids_utilizate.includes(id));
+              // Afișează harta dacă judetul are vreun cod de alertă (rosu, portocaliu, galben, informare)
+              let hasAlert = ['rosu', 'portocaliu', 'galben', 'informare'].includes(colorKey);
               
-              if (id_gasit && colorKey !== '') {
-                  ids_utilizate.push(id_gasit); // Marchează ID-ul ca fiind folosit
-                  let url_img = `/local/harta_anm_${id_gasit}.svg?v=${new Date().getTime()}`;
-                  // Construirea HTML-ului pentru hartă
-                  html_final += `<div style="margin-bottom: 30px; padding: 0 10px; text-align: center;">
-                                   <div style="font-size: 11px; font-weight: bold; color: ${highlightColor}; margin-bottom: 5px; text-transform: uppercase;">Harta Aferentă</div>
-                                   <img src="${url_img}" style="width: 90%; display: block; margin: 0 auto; border-radius: 8px; border: 1.5px solid ${highlightColor}; box-shadow: 0 2px 8px rgba(0,0,0,0.15);">
-                                 </div>`;
+              if (hasAlert && lista_ids.length > 0) {
+                  let id_gasit = lista_ids.find(id => !ids_utilizate.includes(id));
+                  if (id_gasit) {
+                      ids_utilizate.push(id_gasit); // Marchează ID-ul ca fiind folosit
+                      let url_img = `/local/harta_anm_${id_gasit}.svg?v=${new Date().getTime()}`;
+                      // Construirea HTML-ului pentru hartă
+                      html_final += `<div style="margin-bottom: 30px; padding: 0 10px; text-align: center;">
+                                       <div style="font-size: 11px; font-weight: bold; color: ${highlightColor}; margin-bottom: 5px; text-transform: uppercase;">Harta Aferentă</div>
+                                       <img src="${url_img}" style="width: 90%; display: block; margin: 0 auto; border-radius: 8px; border: 1.5px solid ${highlightColor}; box-shadow: 0 2px 8px rgba(0,0,0,0.15);">
+                                     </div>`;
+                  }
               }
           }
 

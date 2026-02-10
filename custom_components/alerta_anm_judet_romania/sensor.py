@@ -111,11 +111,16 @@ class ANMAlertSensor(Entity):
                                 self._attributes = prev_attrs
                                 return
 
-                            self._state = "alerta" if avertizari else "liniste"
+                            # Filtrează NUMAI alertele NATIONAL (informări meteorologice)
+                            national_alerts = [a for a in avertizari if a.get("judet") == "NATIONAL"]
+                            
+                            self._state = "alerta" if national_alerts else "liniste"
                             self._last_success_ts = int(asyncio.get_event_loop().time())
+                            
+                            # Stochează NUMAI alertele NATIONAL în atribute
                             self._attributes = {
-                                "numar_avertizari": len(avertizari),
-                                "avertizari": avertizari,
+                                "numar_avertizari": len(national_alerts),
+                                "avertizari": national_alerts,  # Numai NATIONAL pentru informări generale
                                 "friendly_name": "ANM Avertizare Generala",
                                 "sursa": "json",
                             }
@@ -136,11 +141,14 @@ class ANMAlertSensor(Entity):
                         if html_ok:
                             avertizari = self._parse_html_alerts(html_text)
                             if avertizari or html_text:
-                                self._state = "alerta" if avertizari else "liniste"
+                                # Filtrează NUMAI alertele NATIONAL (informări meteorologice)
+                                national_alerts = [a for a in avertizari if a.get("judet") == "NATIONAL"]
+                                
+                                self._state = "alerta" if national_alerts else "liniste"
                                 self._last_success_ts = int(asyncio.get_event_loop().time())
                                 self._attributes = {
-                                    "numar_avertizari": len(avertizari),
-                                    "avertizari": avertizari,
+                                    "numar_avertizari": len(national_alerts),
+                                    "avertizari": national_alerts,  # Numai NATIONAL pentru informări generale
                                     "friendly_name": "ANM Avertizare Generala",
                                     "sursa": "html",
                                 }
@@ -319,9 +327,16 @@ class ANMAlertSensor(Entity):
                 if zone_key in normalized_msg:
                     candidate_codes.extend(zone_codes)
             
-            # Pentru INFORMARE (cod 0), aplicăm național
+            # Pentru INFORMARE (cod 0), adaugă ca alertă generală fără județ specific
+            # Informările nu se aplică la județe individuale pentru a evita duplicarea
             if color_val == 0:
-                counties = []  # Va fi aplicat la toate județele mai jos
+                alerts.append({
+                    "judet": "NATIONAL",  # Marcaj special pentru informări naționale
+                    "culoare": color_val,
+                    "mesaj": msg_clean,
+                })
+                # Setăm counties la o listă specială pentru a sări peste distribuția normală
+                counties = ["__SKIP__"]
             elif candidate_codes:
                 # Pentru cod colorat cu zone multiple menționate, returnăm toți candidații
                 # Senzorul de hartă va filtra la nivel de județ
@@ -329,7 +344,10 @@ class ANMAlertSensor(Entity):
             else:
                 counties = []
         
-        if not counties:
+        # Sărim peste distribuția normală pentru informări
+        if counties == ["__SKIP__"]:
+            pass  # Informarea deja adăugată mai sus, nu procesăm mai departe
+        elif not counties:
             # Aplicăm la toate județele
             for code in JUDETE:
                 alerts.append({"judet": code, "culoare": color_val, "mesaj": msg_clean})
@@ -609,7 +627,8 @@ class ANMMessageSensor(Entity):
             }
             return
 
-        gl_list = [a for a in avertizari if a.get("judet") == self._judet_cod]
+        # Filtrează alertele pentru județul specific + informările naționale
+        gl_list = [a for a in avertizari if a.get("judet") == self._judet_cod or a.get("judet") == "NATIONAL"]
         if not gl_list:
             self._state = "liniste"
             self._attributes = {
@@ -769,6 +788,7 @@ class ANMMapColorSensor(Entity):
         self._id_sensor = id_sensor
         self._state = "verde"
         self._attributes = {}
+        self._entity_picture = None
 
     @property
     def name(self):
@@ -798,12 +818,31 @@ class ANMMapColorSensor(Entity):
     def unique_id(self):
         return f"anm_culoare_harta_{self._judet_cod.lower()}"
 
+    @property
+    def entity_picture(self):
+        """Returnează URL-ul hărții cu prioritate cea mai mare."""
+        return self._entity_picture
+        max_priority = 0
+        max_id = None
+        
+        for map_id, color in date_harti.items():
+            if priority.get(color, 0) > max_priority:
+                max_priority = priority.get(color, 0)
+                max_id = map_id
+        
+        # Returnează URL-ul local al hărții (informare inclusă)
+        if max_id and max_priority > 0:
+            return f"/local/harta_anm_{max_id}.svg"
+        
+        return None
+
     async def async_update(self, now=None):
         """Actualizare culoare prin apelarea scriptului check_map.py."""
         sensor_ids = self._id_sensor.state
 
         if not sensor_ids or sensor_ids in ["unknown", "unavailable", "0", ""]:
             self._state = "verde"
+            self._entity_picture = None
             self._attributes = {
                 "date_harti": {},
                 "judet_cod": self._judet_cod,
@@ -829,31 +868,52 @@ class ANMMapColorSensor(Entity):
             if process.returncode == 0:
                 result = json.loads(stdout.decode())
                 date_harti = result.get("date_harti", {})
+                
+                _LOGGER.info(
+                    "check_map.py output pentru %s: %s", 
+                    self._judet_nume, date_harti
+                )
 
                 priority = {"rosu": 4, "portocaliu": 3, "galben": 2, "informare": 1, "verde": 0}
                 max_color = "verde"
                 max_priority = 0
+                max_id = None
 
-                for _, color in date_harti.items():
+                for map_id, color in date_harti.items():
                     if priority.get(color, 0) > max_priority:
                         max_priority = priority.get(color, 0)
                         max_color = color
+                        max_id = map_id
 
                 self._state = max_color
+                
+                # Setează entity_picture pentru culori non-verde (inclusiv informare)
+                if max_id and max_priority > 0:
+                    self._entity_picture = f"/local/harta_anm_{max_id}.svg"
+                else:
+                    self._entity_picture = None
+                
                 self._attributes = {
                     "date_harti": date_harti,
                     "numar_harti_verificate": len(date_harti),
                     "judet_cod": self._judet_cod,
                     "friendly_name": f"Culoare Hartă {self._judet_nume}",
                 }
+                
+                # Adaugă URL-ul hărții în atribute pentru referință
+                if self._entity_picture:
+                    self._attributes["entity_picture"] = self._entity_picture
 
                 _LOGGER.info(
-                    "Culoare hartă pentru %s: %s", self._judet_nume, self._state
+                    "Culoare hartă pentru %s: %s (harta: %s)", 
+                    self._judet_nume, self._state, self._entity_picture
                 )
             else:
                 _LOGGER.error("Eroare la rularea check_map.py: %s", stderr.decode())
                 self._state = "necunoscut"
+                self._entity_picture = None
 
         except Exception as exc:  # pragma: no cover - runtime log
             _LOGGER.error("Eroare la verificarea culorii hărții: %s", exc)
             self._state = "necunoscut"
+            self._entity_picture = None
