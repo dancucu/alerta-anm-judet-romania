@@ -111,14 +111,16 @@ class ANMAlertSensor(Entity):
                                 self._attributes = prev_attrs
                                 return
 
-                            self._state = "alerta" if avertizari else "liniste"
+                            # Filtrează NUMAI alertele NATIONAL (informări meteorologice)
+                            national_alerts = [a for a in avertizari if a.get("judet") == "NATIONAL"]
+                            
+                            self._state = "alerta" if national_alerts else "liniste"
                             self._last_success_ts = int(asyncio.get_event_loop().time())
                             
-                            # Reduce dimensiunea atributelor - stochează lista completă dar sub alt nume
-                            # pentru a putea fi folosită de alte senzori
+                            # Stochează NUMAI alertele NATIONAL în atribute
                             self._attributes = {
-                                "numar_avertizari": len(avertizari),
-                                "avertizari": avertizari,  # Lista completă pentru procesare internă
+                                "numar_avertizari": len(national_alerts),
+                                "avertizari": national_alerts,  # Numai NATIONAL pentru informări generale
                                 "friendly_name": "ANM Avertizare Generala",
                                 "sursa": "json",
                             }
@@ -139,11 +141,14 @@ class ANMAlertSensor(Entity):
                         if html_ok:
                             avertizari = self._parse_html_alerts(html_text)
                             if avertizari or html_text:
-                                self._state = "alerta" if avertizari else "liniste"
+                                # Filtrează NUMAI alertele NATIONAL (informări meteorologice)
+                                national_alerts = [a for a in avertizari if a.get("judet") == "NATIONAL"]
+                                
+                                self._state = "alerta" if national_alerts else "liniste"
                                 self._last_success_ts = int(asyncio.get_event_loop().time())
                                 self._attributes = {
-                                    "numar_avertizari": len(avertizari),
-                                    "avertizari": avertizari,
+                                    "numar_avertizari": len(national_alerts),
+                                    "avertizari": national_alerts,  # Numai NATIONAL pentru informări generale
                                     "friendly_name": "ANM Avertizare Generala",
                                     "sursa": "html",
                                 }
