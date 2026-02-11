@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.6 - 2026-02-11
+- Fallback inteligent cu revenire automată: API JSON → HTML când API eșuează, cu verificare periodică (5 min) și revenire automată la API când devine disponibil
+- Tracking sursa activă (JSON/HTML) în atributul `sursa_activa`
+- Atribut nou `next_api_check` pentru transparență când rulează pe HTML
+- Log-uri detaliate pentru tranziții între surse
+
 ## 1.1.4 - 2026-02-10
 - Parser HTML mai tolerant: detectează alertele chiar dacă div-urile nu au clasa standard, caută județele și în text (cu normalizare diacritice) și evită duplicatele; suportă în continuare "INFORMARE".
 
