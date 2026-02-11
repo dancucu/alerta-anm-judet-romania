@@ -1,7 +1,7 @@
 type: conditional
 conditions:
   - condition: state
-    entity: sensor.mesaj_meteo_galati
+    entity: sensor.mesaj_meteo_caras_severin
     state: alerta
 card:
   type: custom:fold-entity-row
@@ -30,7 +30,7 @@ card:
         - color: |
             [[[
               // Determină culoarea celui mai grav cod din mesaj
-              const mesajEntityId = 'sensor.mesaj_meteo_galati';
+              const mesajEntityId = 'sensor.mesaj_meteo_caras_severin';
               const mesajEntity = states[mesajEntityId];
               const text_complet = (mesajEntity && mesajEntity.attributes) ? (mesajEntity.attributes.mesaj_complet || '') : '';
               
@@ -56,7 +56,7 @@ card:
         - color: |
             [[[
               // Determină culoarea celui mai grav cod din mesaj
-              const mesajEntityId = 'sensor.mesaj_meteo_galati';
+              const mesajEntityId = 'sensor.mesaj_meteo_caras_severin';
               const mesajEntity = states[mesajEntityId];
               const text_complet = (mesajEntity && mesajEntity.attributes) ? (mesajEntity.attributes.mesaj_complet || '') : '';
               
@@ -77,7 +77,7 @@ card:
             ]]]
   entities:
     - type: custom:button-card
-      entity: sensor.mesaj_meteo_galati
+      entity: sensor.mesaj_meteo_caras_severin
       show_name: false
       show_label: true
       show_state: false
@@ -85,7 +85,7 @@ card:
       label: |
         [[[
           // --- CONFIGURARE INIȚIALĂ ---
-          const mesajEntityId = 'sensor.mesaj_meteo_galati';
+          const mesajEntityId = 'sensor.mesaj_meteo_caras_severin';
           const mesajEntity = states[mesajEntityId];
           const text_complet = (mesajEntity && mesajEntity.attributes) ? (mesajEntity.attributes.mesaj_complet || '') : '';
 
