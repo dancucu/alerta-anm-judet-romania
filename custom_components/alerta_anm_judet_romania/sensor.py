@@ -65,6 +65,9 @@ class ANMAlertSensor(Entity):
         self._attributes = {}
         self._last_success_ts = None
         self._judet_name_to_code = {v.lower(): k for k, v in JUDETE.items()}
+        self._active_source = None  # 'json' sau 'html'
+        self._last_api_check = 0  # timestamp ultimei verificări API
+        self._api_check_interval = 300  # verificăm API-ul la fiecare 5 minute când suntem pe HTML
 
     @property
     def name(self):
@@ -87,48 +90,65 @@ class ANMAlertSensor(Entity):
         return "avertizari_meteo_anm"
 
     async def async_update(self, now=None):
-        """Actualizează avertizările: JSON primar, HTML fallback, păstrează ultima stare pe erori."""
+        """Actualizează avertizările cu fallback inteligent și revenire automată la API."""
         prev_state = self._state
         prev_attrs = self._attributes.copy()
+        current_time = int(asyncio.get_event_loop().time())
 
         try:
             async with async_timeout.timeout(10):
                 session = async_get_clientsession(self._hass, verify_ssl=False)
 
-                # 1) Primar: API JSON
-                try:
-                    async with session.get(JSON_URL) as response:
-                        if response.status == 200:
-                            data = await response.json()
-                            avertizari_raw = data.get("avertizari", []) if isinstance(data, dict) else []
-                            avertizari = self._normalize_alerts(avertizari_raw)
+                # Dacă suntem pe HTML, verificăm periodic API-ul pentru a reveni la el
+                should_check_api = (
+                    self._active_source is None  # Prima rulare
+                    or self._active_source == 'json'  # Suntem pe API, continuăm cu el
+                    or (self._active_source == 'html' and 
+                        current_time - self._last_api_check >= self._api_check_interval)  # E timpul să verificăm API-ul
+                )
 
-                            if not avertizari and prev_attrs.get("avertizari"):
-                                _LOGGER.warning(
-                                    "Răspuns ANM JSON fără avertizări; păstrez ultima stare disponibilă"
-                                )
-                                self._state = prev_state
-                                self._attributes = prev_attrs
+                # 1) Încercăm API-ul JSON (sau dacă suntem pe HTML și e timpul să verificăm)
+                if should_check_api:
+                    try:
+                        self._last_api_check = current_time
+                        async with session.get(JSON_URL) as response:
+                            if response.status == 200:
+                                data = await response.json()
+                                avertizari_raw = data.get("avertizari", []) if isinstance(data, dict) else []
+                                avertizari = self._normalize_alerts(avertizari_raw)
+
+                                if not avertizari and prev_attrs.get("avertizari"):
+                                    _LOGGER.warning(
+                                        "Răspuns ANM JSON fără avertizări; păstrez ultima stare disponibilă"
+                                    )
+                                    self._state = prev_state
+                                    self._attributes = prev_attrs
+                                    return
+
+                                # API funcționează! Rămânem pe el
+                                if self._active_source == 'html':
+                                    _LOGGER.info("✓ API JSON disponibil din nou! Revenire de la HTML la API.")
+                                
+                                self._active_source = 'json'
+                                self._state = "alerta" if avertizari else "liniste"
+                                self._last_success_ts = current_time
+                                self._attributes = {
+                                    "numar_avertizari": len(avertizari),
+                                    "avertizari": avertizari,
+                                    "friendly_name": "Avertizari Meteo ANM",
+                                    "sursa": "json",
+                                    "sursa_activa": self._active_source,
+                                }
                                 return
 
-                            self._state = "alerta" if avertizari else "liniste"
-                            self._last_success_ts = int(asyncio.get_event_loop().time())
-                            self._attributes = {
-                                "numar_avertizari": len(avertizari),
-                                "avertizari": avertizari,
-                                "friendly_name": "Avertizari Meteo ANM",
-                                "sursa": "json",
-                            }
-                            return
+                            _LOGGER.warning(
+                                "Eroare HTTP %s la API JSON; încerc fallback HTML",
+                                response.status,
+                            )
+                    except Exception as exc_json:  # pragma: no cover - runtime log
+                        _LOGGER.warning("Eroare la API JSON; încerc fallback HTML: %s", exc_json)
 
-                        _LOGGER.warning(
-                            "Eroare HTTP %s la API JSON; încerc fallback HTML",
-                            response.status,
-                        )
-                except Exception as exc_json:  # pragma: no cover - runtime log
-                    _LOGGER.warning("Eroare la API JSON; încerc fallback HTML: %s", exc_json)
-
-                # 2) Fallback: pagina HTML
+                # 2) Fallback: pagina HTML (sau continuăm cu HTML dacă suntem deja pe el)
                 try:
                     async with session.get(HTML_URL) as resp_html:
                         html_ok = resp_html.status == 200
@@ -136,13 +156,20 @@ class ANMAlertSensor(Entity):
                         if html_ok:
                             avertizari = self._normalize_alerts(self._parse_html_alerts(html_text))
                             if avertizari or html_text:
+                                # Trecem pe HTML doar dacă API-ul a eșuat
+                                if self._active_source != 'html':
+                                    _LOGGER.warning("⚠ API JSON indisponibil. Trecem pe sursa HTML.")
+                                
+                                self._active_source = 'html'
                                 self._state = "alerta" if avertizari else "liniste"
-                                self._last_success_ts = int(asyncio.get_event_loop().time())
+                                self._last_success_ts = current_time
                                 self._attributes = {
                                     "numar_avertizari": len(avertizari),
                                     "avertizari": avertizari,
                                     "friendly_name": "Avertizari Meteo ANM",
                                     "sursa": "html",
+                                    "sursa_activa": self._active_source,
+                                    "next_api_check": current_time + self._api_check_interval,
                                 }
                                 return
                         _LOGGER.warning(
