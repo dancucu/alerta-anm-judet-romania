@@ -61,7 +61,6 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
     async_add_entities(entities, update_before_add=True)
         return True
         async_track_time_interval(hass, _periodic_update, update_interval)
-        return True
 class ANMGeneralMessageSensor(Entity):
     """Senzor pentru mesajul meteo general (toate avertizările)."""
 
