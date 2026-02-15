@@ -6,10 +6,20 @@ import os
 import re
 from datetime import timedelta
 
-import async_timeout
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
-from homeassistant.helpers.entity import Entity
-from homeassistant.helpers.event import async_track_time_interval
+
+# Importuri Home Assistant – ignoră erorile de import la rulare locală
+try:
+    import async_timeout
+    from homeassistant.helpers.aiohttp_client import async_get_clientsession
+    from homeassistant.helpers.entity import Entity
+    from homeassistant.helpers.event import async_track_time_interval
+except ImportError:
+    # Pentru testare/analiză statică în afara Home Assistant
+    async_timeout = None
+    async_get_clientsession = None
+    Entity = object
+    def async_track_time_interval(*a, **kw):
+        pass
 
 from .const import (
     CONF_AUTO_DOWNLOAD,
@@ -128,7 +138,7 @@ class ANMAlertSensor(Entity):
         return "anm_avertizare_generala"
 
     async def async_update(self, now=None):
-        """Actualizează avertizările cu fallback inteligent, cache persistent (inclusiv API raw) și revenire automată la API."""
+        """Actualizează avertizările doar cu fallback pe cache persistent (NU HTML, NU alte surse)."""
         prev_state = self._state
         prev_attrs = self._attributes.copy()
         current_time = int(asyncio.get_event_loop().time())
@@ -136,90 +146,46 @@ class ANMAlertSensor(Entity):
         try:
             async with async_timeout.timeout(10):
                 session = async_get_clientsession(self._hass, verify_ssl=False)
-
-                should_check_api = (
-                    self._active_source is None
-                    or self._active_source == 'json'
-                    or (self._active_source == 'html' and current_time - self._last_api_check >= self._api_check_interval)
-                )
-
-                # 1) Încercăm API-ul JSON (sau dacă suntem pe HTML și e timpul să verificăm)
-                if should_check_api:
-                    try:
-                        self._last_api_check = current_time
-                        async with session.get(JSON_URL) as response:
-                            if response.status == 200:
-                                data = await response.json()
-                                avertizari_raw = data.get("avertizari", []) if isinstance(data, dict) else []
-                                avertizari = self._normalize_alerts(avertizari_raw)
-
-                                if not avertizari and prev_attrs.get("avertizari"):
-                                    _LOGGER.warning(
-                                        "Răspuns ANM JSON fără avertizări; păstrez ultima stare disponibilă"
-                                    )
-                                    self._state = prev_state
-                                    self._attributes = prev_attrs
-                                    return
-
-                                if self._active_source == 'html':
-                                    _LOGGER.info("✓ API JSON disponibil din nou! Revenire de la HTML la API.")
-
-                                self._active_source = 'json'
-                                self._state = "alerta" if avertizari else "liniste"
-                                self._last_success_ts = current_time
-                                self._attributes = {
-                                    "numar_avertizari": len(avertizari),
-                                    "avertizari": avertizari,
-                                    "friendly_name": "Avertizari Meteo ANM",
-                                    "sursa": "json",
-                                    "sursa_activa": self._active_source,
-                                }
-                                await self._save_to_cache(data)
-                                return
-
-                            _LOGGER.warning(
-                                "Eroare HTTP %s la API JSON; încerc fallback HTML",
-                                response.status,
-                            )
-                    except Exception as exc_json:
-                        _LOGGER.warning("Eroare la API JSON; încerc fallback HTML: %s", exc_json)
-
-                # 2) Fallback: pagina HTML (sau continuăm cu HTML dacă suntem deja pe el)
                 try:
-                    async with session.get(HTML_URL) as resp_html:
-                        html_ok = resp_html.status == 200
-                        html_text = await resp_html.text() if html_ok else ""
-                        if html_ok:
-                            avertizari = self._normalize_alerts(self._parse_html_alerts(html_text))
-                            if avertizari or html_text:
-                                if self._active_source != 'html':
-                                    _LOGGER.warning("⚠ API JSON indisponibil. Trecem pe sursa HTML.")
+                    self._last_api_check = current_time
+                    async with session.get(JSON_URL) as response:
+                        if response.status == 200:
+                            data = await response.json()
+                            avertizari_raw = data.get("avertizari", []) if isinstance(data, dict) else []
+                            avertizari = self._normalize_alerts(avertizari_raw)
 
-                                self._active_source = 'html'
-                                self._state = "alerta" if avertizari else "liniste"
-                                self._last_success_ts = current_time
-                                self._attributes = {
-                                    "numar_avertizari": len(avertizari),
-                                    "avertizari": avertizari,
-                                    "friendly_name": "ANM Avertizare Generala",
-                                    "sursa": "html",
-                                    "sursa_activa": self._active_source,
-                                    "next_api_check": current_time + self._api_check_interval,
-                                }
-                                await self._save_to_cache()
+                            if not avertizari and prev_attrs.get("avertizari"):
+                                _LOGGER.warning(
+                                    "Răspuns ANM JSON fără avertizări; păstrez ultima stare disponibilă"
+                                )
+                                self._state = prev_state
+                                self._attributes = prev_attrs
                                 return
-                        _LOGGER.warning(
-                            "HTTP %s la /avertizari/; păstrez ultima stare", resp_html.status
-                        )
-                except Exception as exc_html:
-                    _LOGGER.warning(
-                        "Eroare la parsarea /avertizari/: %s; păstrez ultima stare", exc_html
-                    )
 
-                # 3) Ambele au eșuat: încearcă să încarci din cache persistent
+                            self._active_source = 'json'
+                            self._state = "alerta" if avertizari else "liniste"
+                            self._last_success_ts = current_time
+                            self._attributes = {
+                                "numar_avertizari": len(avertizari),
+                                "avertizari": avertizari,
+                                "friendly_name": "Avertizari Meteo ANM",
+                                "sursa": "json",
+                                "sursa_activa": self._active_source,
+                            }
+                            await self._save_to_cache(data)
+                            return
+
+                        _LOGGER.warning(
+                            "Eroare HTTP %s la API JSON; fallback la cache persistent",
+                            response.status,
+                        )
+                except Exception as exc_json:
+                    _LOGGER.warning("Eroare la API JSON; fallback la cache persistent: %s", exc_json)
+
+                # Fallback: doar cache persistent
                 loaded = await self._load_from_cache()
                 if loaded:
-                    _LOGGER.warning("Ambele surse ANM au eșuat, dar am încărcat datele din cache persistent.")
+                    _LOGGER.warning("Sursa ANM (API JSON) a eșuat, am încărcat datele din cache persistent.")
                     return
                 # Dacă nu există cache persistent, fallback la in-memory
                 if prev_attrs:
