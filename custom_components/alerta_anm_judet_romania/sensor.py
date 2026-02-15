@@ -294,7 +294,10 @@ class ANMAlertSensor(Entity):
         return normalized
 
     def _normalize_alerts(self, alerts):
-        """Normalizează alertele; informările fără județ devin naționale (toate județele)."""
+        """
+        Normalizează lista de avertizări: returnează exact lista oferită de API sau cache,
+        fără replicare pe toate județele. Fiecare element trebuie să aibă cheile: judet, culoare, mesaj.
+        """
         if not isinstance(alerts, list):
             return []
 
@@ -302,14 +305,14 @@ class ANMAlertSensor(Entity):
         for item in alerts:
             if not isinstance(item, dict):
                 continue
-
             msg = item.get("mesaj", "") or item.get("text", "")
             color_raw = item.get("culoare", item.get("cod", 0))
             try:
                 color_val = int(color_raw)
-            except Exception:  # pragma: no cover - defensive
+            except Exception:
                 color_val = 0
 
+            # Acceptă direct structura: cu "judet" sau "judete" (listă)
             judete_list = item.get("judete") if isinstance(item.get("judete"), list) else None
             if judete_list:
                 for j in judete_list:
