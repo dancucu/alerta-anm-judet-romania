@@ -184,37 +184,8 @@ class ANMAlertSensor(Entity):
                     except Exception as exc_json:
                         _LOGGER.warning("Eroare la API JSON; încerc fallback HTML: %s", exc_json)
 
-                # 2) Fallback: pagina HTML (sau continuăm cu HTML dacă suntem deja pe el)
-                try:
-                    async with session.get(HTML_URL) as resp_html:
-                        html_ok = resp_html.status == 200
-                        html_text = await resp_html.text() if html_ok else ""
-                        if html_ok:
-                            avertizari = self._normalize_alerts(self._parse_html_alerts(html_text))
-                            if avertizari or html_text:
-                                if self._active_source != 'html':
-                                    _LOGGER.warning("⚠ API JSON indisponibil. Trecem pe sursa HTML.")
 
-                                self._active_source = 'html'
-                                self._state = "alerta" if avertizari else "liniste"
-                                self._last_success_ts = current_time
-                                self._attributes = {
-                                    "numar_avertizari": len(avertizari),
-                                    "avertizari": avertizari,
-                                    "friendly_name": "ANM Avertizare Generala",
-                                    "sursa": "html",
-                                    "sursa_activa": self._active_source,
-                                    "next_api_check": current_time + self._api_check_interval,
-                                }
-                                await self._save_to_cache()
-                                return
-                        _LOGGER.warning(
-                            "HTTP %s la /avertizari/; păstrez ultima stare", resp_html.status
-                        )
-                except Exception as exc_html:
-                    _LOGGER.warning(
-                        "Eroare la parsarea /avertizari/: %s; păstrez ultima stare", exc_html
-                    )
+                # 2) Fallback: direct la cache persistent (NU HTML)
 
                 # 3) Ambele au eșuat: încearcă să încarci din cache persistent
                 loaded = await self._load_from_cache()
