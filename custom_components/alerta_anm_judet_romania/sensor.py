@@ -178,11 +178,11 @@ class ANMAlertSensor(Entity):
                                 return
 
                             _LOGGER.warning(
-                                "Eroare HTTP %s la API JSON; încerc fallback HTML",
+                                "Eroare HTTP %s la API JSON; fallback la cache persistent",
                                 response.status,
                             )
                     except Exception as exc_json:
-                        _LOGGER.warning("Eroare la API JSON; încerc fallback HTML: %s", exc_json)
+                        _LOGGER.warning("Eroare la API JSON; fallback la cache persistent: %s", exc_json)
 
 
                 # 2) Fallback: direct la cache persistent (NU HTML)
