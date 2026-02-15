@@ -110,6 +110,27 @@ class ANMAlertSensor(Entity):
             if data:
                 self._state = data.get("alert_state")
                 self._attributes = data.get("alert_attrs", {})
+                # Fallback: dacă avertizari e gol și există api_raw, încearcă să extragi avertizări din api_raw
+                avertizari = self._attributes.get("avertizari", [])
+                if (not avertizari or (isinstance(avertizari, list) and len(avertizari) == 0)) and "api_raw" in data:
+                    api_raw = data["api_raw"]
+                    # Extrage avertizari din api_raw (poate fi dict sau listă)
+                    if isinstance(api_raw, dict):
+                        raw_alerts = api_raw.get("avertizari", [])
+                        if not raw_alerts and "avertizari" in api_raw:
+                            # uneori avertizari poate fi dict gol
+                            raw_alerts = []
+                        # fallback: dacă nu există avertizari, încearcă să caute direct lista
+                        if not raw_alerts and isinstance(api_raw.get("avertizari"), dict):
+                            raw_alerts = list(api_raw["avertizari"].values())
+                    elif isinstance(api_raw, list):
+                        raw_alerts = api_raw
+                    else:
+                        raw_alerts = []
+                    normalized = self._normalize_alerts(raw_alerts)
+                    self._attributes["avertizari"] = normalized
+                    self._attributes["numar_avertizari"] = len(normalized)
+                    _LOGGER.info("Avertizări extrase din api_raw fallback: %s", len(normalized))
                 _LOGGER.info("Date ANMAlertSensor încărcate din cache %s", cache_path)
                 return True
         except Exception as exc:
