@@ -280,14 +280,27 @@ class ANMAlertSensor(Entity):
                             self._state = "alerta" if len(avertizari) > 0 else "liniste"
                             self._last_success_ts = current_time
                             # Păstrează TOATE atributele din API/cache, nu doar pentru un județ
-                            self._attributes = dict(data)
-                            self._attributes.update({
-                                "numar_avertizari": len(avertizari),
-                                "avertizari": avertizari,
+                            # Filtrăm avertizările pentru a expune doar date esențiale ca atribute
+                            def _alert_attr_min(alert):
+                                return {
+                                    k: alert.get(k)
+                                    for k in [
+                                        "judet", "culoare", "mesaj", "id_avertizare", "intervalul", "data_expirarii", "severitate"
+                                    ]
+                                    if k in alert
+                                }
+                            avertizari_min = [_alert_attr_min(a) for a in avertizari]
+                            self._attributes = {
+                                "numar_avertizari": len(avertizari_min),
+                                "avertizari": avertizari_min,
                                 "friendly_name": "Avertizari Meteo ANM",
                                 "sursa": "json",
                                 "sursa_activa": self._active_source,
-                            })
+                            }
+                            # Nu includem coordGis, poligoane sau texte mari în atribute!
+                            # Detaliile mari rămân doar în fișierul GeoJSON pentru hartă
+                            # Dacă vrei să expui și alte câmpuri mici, adaugă-le în lista de mai sus
+                            await self._save_to_cache(data)
                             await self._save_to_cache(data)
                             return
 
