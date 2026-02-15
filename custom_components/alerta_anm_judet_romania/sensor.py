@@ -59,7 +59,6 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
         map_color_sensor,
     ]
     async_add_entities(entities, update_before_add=True)
-        async_track_time_interval(hass, _periodic_update, update_interval)
         return True
         async_track_time_interval(hass, _periodic_update, update_interval)
         return True
