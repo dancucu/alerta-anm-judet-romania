@@ -45,6 +45,8 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
     alert_sensor = ANMAlertSensor(hass)
     id_sensor = ANMAlertIDSensor(hass)
     message_sensor = ANMMessageSensor(hass, judet_cod, judet_nume, alert_sensor)
+
+    general_message_sensor = ANMGeneralMessageSensor(hass, alert_sensor)
     map_download_sensor = ANMMapDownloadSensor(hass, id_sensor, True)
     map_color_sensor = ANMMapColorSensor(hass, judet_cod, judet_nume, id_sensor)
 
@@ -52,10 +54,82 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
         alert_sensor,
         id_sensor,
         message_sensor,
+        general_message_sensor,
         map_download_sensor,
         map_color_sensor,
     ]
     async_add_entities(entities, update_before_add=True)
+class ANMGeneralMessageSensor(Entity):
+    """Senzor pentru mesajul meteo general (toate avertizările)."""
+
+    def __init__(self, hass, alert_sensor):
+        self._hass = hass
+        self._alert_sensor = alert_sensor
+        self._state = "liniste"
+        self._attributes = {
+            "tip_cod": "Verde",
+            "mesaj_complet": "Nu sunt avertizări meteo generale active.",
+            "friendly_name": "Mesaj Meteo General",
+        }
+
+    @property
+    def name(self):
+        return "Mesaj Meteo General"
+
+    @property
+    def state(self):
+        return self._state
+
+    @property
+    def extra_state_attributes(self):
+        return self._attributes
+
+    @property
+    def icon(self):
+        return "mdi:alert-decagram"
+
+    @property
+    def unique_id(self):
+        return "anm_mesaj_meteo_general"
+
+    @property
+    def available(self):
+        return self._alert_sensor.state not in [None, "unknown", "unavailable"]
+
+    async def async_update(self, now=None):
+        await self._process_alerts()
+
+    async def _process_alerts(self):
+        avertizari = self._alert_sensor.extra_state_attributes.get("avertizari")
+        if not avertizari:
+            self._state = "liniste"
+            self._attributes = {
+                "tip_cod": "Verde",
+                "mesaj_complet": "Nu sunt avertizări meteo generale active.",
+                "friendly_name": "Mesaj Meteo General",
+            }
+            return
+
+        self._state = "alerta"
+        max_code = max([int(a.get("culoare", 0)) for a in avertizari])
+        tip_cod_map = {3: "Rosu", 2: "Portocaliu", 1: "Galben", 0: "Informare"}
+        tip_cod = tip_cod_map.get(max_code, "Verde")
+
+        mesaje = []
+        for item in avertizari:
+            msg_raw = item.get("mesaj", "")
+            msg_raw = msg_raw.replace("<br />", "\n").replace("</p>", "\n")
+            msg_raw = re.sub(r"<[^>]*>", "", msg_raw)
+            msg_raw = msg_raw.replace("&nbsp;", " ").replace("&ndash;", "-").strip()
+            msg_final = re.sub(r"\n\s*\n", "\n\n", msg_raw).strip()
+            mesaje.append(msg_final)
+
+        mesaj_complet = "\n\n".join(mesaje).strip()
+        self._attributes = {
+            "tip_cod": tip_cod,
+            "mesaj_complet": mesaj_complet if mesaj_complet else "Nu sunt avertizări meteo generale active.",
+            "friendly_name": "Mesaj Meteo General",
+        }
 
     async def _periodic_update(now):
         for entity in entities:
