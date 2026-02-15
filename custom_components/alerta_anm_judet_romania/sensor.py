@@ -225,8 +225,9 @@ class ANMAlertSensor(Entity):
     def unique_id(self):
         return "anm_avertizare_generala"
 
+
     async def async_update(self, now=None):
-        """Actualizează avertizările doar cu fallback pe cache persistent (NU HTML, NU alte surse)."""
+        """Actualizează avertizările, compatibil cu structuri noi de răspuns ANM (avertizari sau avertizare)."""
         prev_state = self._state
         prev_attrs = self._attributes.copy()
         current_time = int(asyncio.get_event_loop().time())
@@ -239,7 +240,17 @@ class ANMAlertSensor(Entity):
                     async with session.get(JSON_URL) as response:
                         if response.status == 200:
                             data = await response.json()
-                            avertizari_raw = data.get("avertizari", []) if isinstance(data, dict) else []
+                            avertizari_raw = []
+                            # Acceptă atât 'avertizari' (listă), cât și 'avertizare' (dict sau listă)
+                            if isinstance(data, dict):
+                                if "avertizari" in data and data["avertizari"]:
+                                    avertizari_raw = data["avertizari"]
+                                elif "avertizare" in data and data["avertizare"]:
+                                    # Poate fi dict sau listă
+                                    if isinstance(data["avertizare"], list):
+                                        avertizari_raw = data["avertizare"]
+                                    else:
+                                        avertizari_raw = [data["avertizare"]]
                             avertizari = self._normalize_alerts(avertizari_raw)
                             _LOGGER.warning("[DEBUG] avertizari_raw (API): %s", avertizari_raw)
                             _LOGGER.warning("[DEBUG] avertizari normalizate (API): %s", avertizari)
