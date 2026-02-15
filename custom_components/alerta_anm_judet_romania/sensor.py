@@ -72,11 +72,13 @@ class ANMAlertSensor(Entity):
         self._last_api_check = 0  # timestamp ultimei verificări API
         self._api_check_interval = 300  # verificăm API-ul la fiecare 5 minute când suntem pe HTML
 
-    async def _save_to_cache(self):
+    async def _save_to_cache(self, api_raw=None):
         cache_data = {
             "alert_state": self._state,
             "alert_attrs": self._attributes,
         }
+        if api_raw is not None:
+            cache_data["api_raw"] = api_raw
         cache_path = self._hass.config.path(self._CACHE_FILE)
         def _write_cache(path, data):
             with open(path, "w", encoding="utf-8") as f:
@@ -126,7 +128,7 @@ class ANMAlertSensor(Entity):
         return "anm_avertizare_generala"
 
     async def async_update(self, now=None):
-        """Actualizează avertizările cu fallback inteligent, cache persistent și revenire automată la API."""
+        """Actualizează avertizările cu fallback inteligent, cache persistent (inclusiv API raw) și revenire automată la API."""
         prev_state = self._state
         prev_attrs = self._attributes.copy()
         current_time = int(asyncio.get_event_loop().time())
@@ -172,7 +174,7 @@ class ANMAlertSensor(Entity):
                                     "sursa": "json",
                                     "sursa_activa": self._active_source,
                                 }
-                                await self._save_to_cache()
+                                await self._save_to_cache(data)
                                 return
 
                             _LOGGER.warning(
