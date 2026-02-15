@@ -193,13 +193,15 @@ class ANMAlertSensor(Entity):
                             self._active_source = 'json'
                             self._state = "alerta" if len(avertizari) > 0 else "liniste"
                             self._last_success_ts = current_time
-                            self._attributes = {
+                            # Păstrează TOATE atributele din API/cache, nu doar pentru un județ
+                            self._attributes = dict(data)
+                            self._attributes.update({
                                 "numar_avertizari": len(avertizari),
                                 "avertizari": avertizari,
                                 "friendly_name": "Avertizari Meteo ANM",
                                 "sursa": "json",
                                 "sursa_activa": self._active_source,
-                            }
+                            })
                             await self._save_to_cache(data)
                             return
 
