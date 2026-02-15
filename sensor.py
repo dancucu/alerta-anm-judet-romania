@@ -1,75 +1,57 @@
 """Senzori pentru Alertă ANM Județ România."""
-import asyncio
-import json
 import logging
-import os
 import re
+import json
+import os
 from datetime import timedelta
-
 import async_timeout
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.entity import Entity
 from homeassistant.helpers.event import async_track_time_interval
-
-from .const import (
-    CONF_AUTO_DOWNLOAD,
-    DEFAULT_SCAN_INTERVAL,
-    JUDETE,
-)
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 _LOGGER = logging.getLogger(__name__)
 
 JSON_URL = "https://www.meteoromania.ro/wp-json/meteoapi/v2/avertizari-generale"
-HTML_URL = "https://www.meteoromania.ro/avertizari/"
-
+CACHE_DIR = "/root/homeassistant/.storage/anm_cache"
+CACHE_FILE = f"{CACHE_DIR}/anm_alerta_cache.json"
 
 async def async_setup_entry(hass, config_entry, async_add_entities):
-    """Configurează senzorii pentru integrare."""
-    minutes = config_entry.options.get(
-        "update_interval",
-        config_entry.data.get("update_interval", DEFAULT_SCAN_INTERVAL),
-    )
-    update_interval = timedelta(minutes=minutes)
-    judet_cod = config_entry.data.get("judet_cod", "TM")
-    judet_nume = config_entry.data.get("judet_nume", "Timisoara")
+    # Intervalul de actualizare din configurație (în minute)
+    update_interval = timedelta(minutes=config_entry.data.get("update_interval", 10))
+    judet_cod = config_entry.data.get("judet_cod", "B")
+    judet_nume = config_entry.data.get("judet_nume", "București")
 
     alert_sensor = ANMAlertSensor(hass)
     id_sensor = ANMAlertIDSensor(hass)
     message_sensor = ANMMessageSensor(hass, judet_cod, judet_nume, alert_sensor)
-    map_download_sensor = ANMMapDownloadSensor(hass, id_sensor, True)
-    map_color_sensor = ANMMapColorSensor(hass, judet_cod, judet_nume, id_sensor)
+    map_sensor = ANMMapSensor(hass, judet_cod, judet_nume, id_sensor)
+    color_sensor = ANMMapColorSensor(hass, judet_cod, judet_nume, alert_sensor)
 
-    entities = [
-        alert_sensor,
-        id_sensor,
-        message_sensor,
-        map_download_sensor,
-        map_color_sensor,
-    ]
-    async_add_entities(entities, update_before_add=True)
+    # Adăugarea senzorilor
+    async_add_entities([alert_sensor, id_sensor, message_sensor, map_sensor, color_sensor])
 
-    async def _periodic_update(now):
-        for entity in entities:
-            entity.async_schedule_update_ha_state(True)
+    # Definirea funcției de actualizare care se va executa la intervalul definit
+    async def update_sensors(now):
+        _LOGGER.debug("Se execută actualizarea senzorilor la intervalul setat.")
+        await alert_sensor.async_update()
+        await id_sensor.async_update()
+        await message_sensor.async_update()
+        await map_sensor.async_update()
+        await color_sensor.async_update()
 
-    async_track_time_interval(hass, _periodic_update, update_interval)
-    return True
-
+    # Programarea actualizării la intervalele setate
+    async_track_time_interval(hass, update_sensors, update_interval)
 
 class ANMAlertSensor(Entity):
-    """Senzor pentru lista de avertizări generale ANM."""
-
-    def __init__(self, hass, id_sensor=None):
+    def __init__(self, hass):
         self._hass = hass
-        self._id_sensor = id_sensor
         self._state = None
         self._attributes = {}
-        self._last_success_ts = None
-        self._judet_name_to_code = {v.lower(): k for k, v in JUDETE.items()}
+        self._raw_data = []  # Păstrăm datele complete intern, nu în atribute
 
     @property
     def name(self):
-        return "ANM Avertizare Generala"
+        return "Avertizări Meteo ANM"
 
     @property
     def state(self):
@@ -85,414 +67,136 @@ class ANMAlertSensor(Entity):
 
     @property
     def unique_id(self):
-        return "anm_avertizare_generala"
+        return "anm_avertizari_meteo"
 
     async def async_update(self, now=None):
-        """Actualizează avertizările: JSON primar, HTML fallback, păstrează ultima stare pe erori."""
-        prev_state = self._state
-        prev_attrs = self._attributes.copy()
-
+        _LOGGER.debug("Actualizare date Avertizări Meteo ANM")
         try:
             async with async_timeout.timeout(10):
-                session = async_get_clientsession(self._hass, verify_ssl=False)
-
-                # 1) Primar: API JSON
-                try:
-                    async with session.get(JSON_URL) as response:
-                        if response.status == 200:
-                            data = await response.json()
-                            avertizari = data.get("avertizari", []) if isinstance(data, dict) else []
-
-                            if not avertizari and prev_attrs.get("avertizari"):
-                                _LOGGER.warning(
-                                    "Răspuns ANM JSON fără avertizări; păstrez ultima stare disponibilă"
-                                )
-                                self._state = prev_state
-                                self._attributes = prev_attrs
+                session = async_get_clientsession(self._hass)
+                async with session.get(JSON_URL) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        if not data or isinstance(data, str):
+                            _LOGGER.warning(f"Nu există date disponibile: {data}")
+                            # Încercăm să încărcăm din cache
+                            if await self._load_from_cache():
                                 return
-
-                            # Filtrează NUMAI alertele NATIONAL (informări meteorologice)
-                            national_alerts = [a for a in avertizari if a.get("judet") == "NATIONAL"]
-                            
-                            self._state = "alerta" if national_alerts else "liniste"
-                            self._last_success_ts = int(asyncio.get_event_loop().time())
-                            
-                            # Stochează NUMAI alertele NATIONAL în atribute
+                            self._state = "inactive"
+                            self._raw_data = []
                             self._attributes = {
-                                "numar_avertizari": len(national_alerts),
-                                "avertizari": national_alerts,  # Numai NATIONAL pentru informări generale
-                                "friendly_name": "ANM Avertizare Generala",
-                                "sursa": "json",
+                                "numar_avertizari": 0,
+                                "judete_afectate": 0,
+                                "mesaj": "Nu exista avertizari",
+                                "friendly_name": "Avertizări Meteo ANM"
                             }
                             return
 
-                        _LOGGER.warning(
-                            "Eroare HTTP %s la API JSON; încerc fallback HTML",
-                            response.status,
-                        )
-                except Exception as exc_json:  # pragma: no cover - runtime log
-                    _LOGGER.warning("Eroare la API JSON; încerc fallback HTML: %s", exc_json)
+                        toate_avertizarile = []
 
-                # 2) Fallback: pagina HTML
-                try:
-                    async with session.get(HTML_URL) as resp_html:
-                        html_ok = resp_html.status == 200
-                        html_text = await resp_html.text() if html_ok else ""
-                        if html_ok:
-                            avertizari = self._parse_html_alerts(html_text)
-                            if avertizari or html_text:
-                                # Filtrează NUMAI alertele NATIONAL (informări meteorologice)
-                                national_alerts = [a for a in avertizari if a.get("judet") == "NATIONAL"]
-                                
-                                self._state = "alerta" if national_alerts else "liniste"
-                                self._last_success_ts = int(asyncio.get_event_loop().time())
-                                self._attributes = {
-                                    "numar_avertizari": len(national_alerts),
-                                    "avertizari": national_alerts,  # Numai NATIONAL pentru informări generale
-                                    "friendly_name": "ANM Avertizare Generala",
-                                    "sursa": "html",
-                                }
-                                return
-                        _LOGGER.warning(
-                            "HTTP %s la /avertizari/; păstrez ultima stare", resp_html.status
-                        )
-                except Exception as exc_html:  # pragma: no cover - runtime log
-                    _LOGGER.warning(
-                        "Eroare la parsarea /avertizari/: %s; păstrez ultima stare", exc_html
-                    )
+                        avertizare = data.get('avertizare', None)
+                        if isinstance(avertizare, dict):
+                            avertizare = [avertizare]
 
-                # 3) Ambele au eșuat: păstrăm ultima stare sau unavailable
-                if prev_attrs:
-                    self._state = prev_state
-                    self._attributes = prev_attrs
-                else:
-                    self._state = "unavailable"
-                return
-        except Exception as exc:  # pragma: no cover - runtime log
-            _LOGGER.warning(
-                "Eroare la actualizarea avertizărilor generale; păstrez ultima stare: %s",
-                exc,
-            )
-            if prev_attrs:
-                self._state = prev_state
-                self._attributes = prev_attrs
-            else:
-                self._state = "unavailable"
-
-    def _parse_html_alerts(self, html_text):
-        """Parsează avertizările din pagina HTML /avertizari/."""
-        alerts = []
-        if not html_text:
-            return alerts
-
-        # Taie tot ce este după Legend (acolo încep nowcasting-urile)
-        legend_marker = '<div style="font-weight: bold;width:200px;margin-top:40px">legenda:'
-        legend_idx = html_text.lower().find(legend_marker)
-        if legend_idx != -1:
-            html_text = html_text[:legend_idx]
-
-        parts = []
-
-        def _is_relevant_title(title_text):
-            normalized = self._normalize_name(title_text)
-            if "nowcasting" in normalized:
-                return False
-            allowed_keys = (
-                "informare meteo",
-                "informare meteorologica",
-                "atentionare meteo",
-                "atentionare meteorologica",
-            )
-            return any(key in normalized for key in allowed_keys)
-
-        # Caută perechi title+content
-        paired_blocks = re.findall(
-            r'<div[^>]+alerta_meteo_produsetitle[^>]*>(.*?)</div>\s*<div[^>]+alerta_meteo_produsecontent[^>]*>(.*?)</div>',
-            html_text,
-            re.S | re.IGNORECASE,
-        )
-        if paired_blocks:
-            for raw_title, body in paired_blocks:
-                if _is_relevant_title(raw_title):
-                    parts.append(body)
-
-        if not parts:
-            split_parts = re.split(r'class="alerta_meteo_produsecontent"', html_text)
-            if len(split_parts) > 1:
-                parts = split_parts[1:]
-            else:
-                alt_parts = re.findall(r'<div[^>]+alerta_meteo_produsecontent[^>]*>(.*?)</div>', html_text, re.S)
-                if len(alt_parts) > 1:
-                    parts = alt_parts
-                else:
-                    alt_parts = re.findall(r'<div[^>]+alerta[^>]+>(.*?)</div>', html_text, re.S)
-                    if alt_parts:
-                        parts = alt_parts
-
-        if parts:
-            # Elimină explicit blocurile de tip nowcasting (verifică titlul implicit în body)
-            # Nu elimina blocuri care doar menționează cuvântul în context
-            def _is_nowcasting_block(body_html):
-                # Caută "Atenționare nowcasting" sau "Atentionare nowcasting" ca titlu explicit
-                return bool(re.search(r'(atentionare|atenționare)\s+nowcasting', body_html, re.IGNORECASE))
-            
-            parts = [p for p in parts if not _is_nowcasting_block(p)]
-
-        if not parts:
-            return alerts
-
-        color_map = {"galben": 1, "portocaliu": 2, "rosu": 3, "informare": 0}
-        zone_map = {
-            "banat": ["TM", "CS"],
-            "sudul banatului": ["TM", "CS"],
-            "carpatii meridionali": ["CS", "HD", "GJ", "VL", "AG", "SB", "BV"],
-            "extremitatea vestica a carpatilor meridionali": ["CS", "HD", "GJ"],
-            "dobrogea": ["CT", "TL"],
-            "moldova": ["IS", "VS", "BT", "NT", "BC", "SV", "GL"],
-            "transilvania": ["AB", "AR", "BH", "BN", "BV", "CJ", "CV", "HD", "HR", "MM", "MS", "SB", "SJ", "SM"],
-            "oltenia": ["DJ", "GJ", "MH", "OT", "VL"],
-            "muntenia": ["AG", "BR", "BZ", "CL", "DB", "GR", "IF", "IL", "PH", "TR"]
-        }
-
-        for part in parts:
-            # Extrage întregul conținut al blocului pentru mesaj
-            msg_match = (
-                re.search(r"<td[^>]*colspan=[\"']?3[\"']?[^>]*text-align:justify[^>]*>(.*?)</td>", part, re.S)
-                or re.search(r"<td[^>]*text-align:justify[^>]*>(.*?)</td>", part, re.S)
-                or re.search(r"<td[^>]*colspan=[\"']?3[\"']?[^>]*>(.*?)</td>", part, re.S)
-            )
-            raw_msg = msg_match.group(1) if msg_match else part
-            msg_clean = self._clean_html(raw_msg)
-            
-            # Împarte mesajul în submesaje dacă conține mai multe coduri
-            submessages = self._split_combined_message(msg_clean)
-            
-            for submsg, subcolor in submessages:
-                self._process_single_alert(submsg, subcolor, zone_map, alerts)
-
-        return alerts
-
-    def _split_combined_message(self, msg_clean):
-        """Împarte un mesaj combinat în submesaje separate cu codurile lor."""
-        # Caută toate blocurile de tip INFORMARE/ATENȚIONARE + COD
-        pattern = r'(INFORMARE\s+METEOROLOGIC[AĂ]|ATEN[ȚT]IONARE\s+METEOROLOGIC[AĂ])\s*(.*?)(?=(?:INFORMARE\s+METEOROLOGIC|ATEN[ȚT]IONARE\s+METEOROLOGIC|$))'
-        matches = re.findall(pattern, msg_clean, re.IGNORECASE | re.DOTALL)
-        
-        if not matches:
-            # Dacă nu găsim pattern-ul, returnează mesajul întreg
-            return [(msg_clean, None)]
-        
-        result = []
-        color_map = {"galben": 1, "portocaliu": 2, "rosu": 3, "informare": 0}
-        
-        for alert_type, content in matches:
-            full_text = alert_type + " " + content
-            # Caută COD în acest submesaj
-            cod_match = re.search(r"COD\s*:?\s*(GALBEN|PORTOCALIU|ROSU|INFORMARE)", full_text, re.IGNORECASE)
-            color_val = color_map.get(cod_match.group(1).lower(), 0) if cod_match else 0
-            result.append((full_text.strip(), color_val))
-        
-        return result if result else [(msg_clean, None)]
-
-    def _process_single_alert(self, msg_clean, color_val, zone_map, alerts):
-        """Procesează o singură alertă și adaugă județele afectate."""
-        if color_val is None:
-            # Determină culoarea din mesaj
-            color_map_local = {"galben": 1, "portocaliu": 2, "rosu": 3, "informare": 0}
-            color_match = re.search(r"COD\s*:?\s*(GALBEN|PORTOCALIU|ROSU|INFORMARE)", msg_clean, re.IGNORECASE)
-            if color_match:
-                color_val = color_map_local.get(color_match.group(1).lower(), 0)
-            else:
-                # Dacă nu găsim COD dar avem INFORMARE în titlu, este informare (cod 0)
-                if re.search(r"INFORMARE\s+METEOROLOGIC", msg_clean, re.IGNORECASE):
-                    color_val = 0
-                else:
-                    color_val = 0  # Default la informare
-        
-        counties = []
-        normalized_msg = self._normalize_name(msg_clean)
-        
-        # Caută județe explicit menționate (cu word boundaries)
-        for code, nume in JUDETE.items():
-            normalized_county = self._normalize_name(nume)
-            # Verifică ca word boundary - nu substring
-            pattern = r'\b' + re.escape(normalized_county) + r'\b'
-            if re.search(pattern, normalized_msg):
-                counties.append(code)
-        
-        # Dacă nu găsim județe explicit, verificăm zone
-        if not counties:
-            candidate_codes = []
-            for zone_key, zone_codes in zone_map.items():
-                if zone_key in normalized_msg:
-                    candidate_codes.extend(zone_codes)
-            
-            # Pentru INFORMARE (cod 0), adaugă ca alertă generală fără județ specific
-            # Informările nu se aplică la județe individuale pentru a evita duplicarea
-            if color_val == 0:
-                alerts.append({
-                    "judet": "NATIONAL",  # Marcaj special pentru informări naționale
-                    "culoare": color_val,
-                    "mesaj": msg_clean,
-                })
-                # Setăm counties la o listă specială pentru a sări peste distribuția normală
-                counties = ["__SKIP__"]
-            elif candidate_codes:
-                # Pentru cod colorat cu zone multiple menționate, returnăm toți candidații
-                # Senzorul de hartă va filtra la nivel de județ
-                counties = list(set(candidate_codes))
-            else:
-                counties = []
-        
-        # Sărim peste distribuția normală pentru informări
-        if counties == ["__SKIP__"]:
-            pass  # Informarea deja adăugată mai sus, nu procesăm mai departe
-        elif not counties:
-            # Aplicăm la toate județele
-            for code in JUDETE:
-                alerts.append({"judet": code, "culoare": color_val, "mesaj": msg_clean})
-        else:
-            # Aplicăm doar la județele identificate
-            seen = set()
-            for county_code in counties:
-                if isinstance(county_code, str) and len(county_code) <= 3:
-                    code = county_code
-                else:
-                    # Este nume de județ, trebuie convertit
-                    key = county_code.strip().lower()
-                    norm_key = self._normalize_name(key)
-                    code = self._judet_name_to_code.get(key, self._judet_name_to_code.get(norm_key, county_code))
-                
-                dedup_key = (code, msg_clean)
-                if dedup_key in seen:
-                    continue
-                seen.add(dedup_key)
-                alerts.append({
-                    "judet": code,
-                    "culoare": color_val,
-                    "mesaj": msg_clean,
-                })
-
-    def _filter_by_map_sync(self, candidate_codes):
-        """Filtrează județele candidate verificând culoarea pe hărțile active (sync)."""
-        if not self._id_sensor:
-            return candidate_codes
-        
-        sensor_ids = self._id_sensor.state
-        if not sensor_ids or sensor_ids in ["unknown", "unavailable", "0", ""]:
-            return candidate_codes
-        
-        ids_list = [x.strip() for x in str(sensor_ids).split(",") if x.strip()]
-        if not ids_list or not candidate_codes:
-            return candidate_codes
-        
-        # Descarcă toate hărțile și verifică fiecare județ
-        verified = set()
-        session = async_get_clientsession(self._hass, verify_ssl=False)
-        
-        for map_id in ids_list:
-            try:
-                # Folosim un loop event existent
-                future = self._fetch_and_check_map(session, map_id, candidate_codes)
-                colored_counties = self._hass.loop.create_task(future)
-                # Colectăm rezultatele în verificare asincronă separată
-            except Exception as e:
-                _LOGGER.debug(f"Eroare verificare hartă {map_id}: {e}")
-        
-        # Dacă nu putem verifica, returnăm toți candidații
-        return list(candidate_codes)
-
-    async def _fetch_and_check_map(self, session, map_id, candidate_codes):
-        """Descarcă harta și verifică care județe sunt colorate."""
-        url = f"https://www.meteoromania.ro/wp-content/plugins/meteo/harti/harta.svg.php?id_avertizare={map_id}"
-        colored = []
-        
-        try:
-            async with async_timeout.timeout(5):
-                async with session.get(url) as response:
-                    if response.status != 200:
-                        return colored
-                    
-                    content = await response.text()
-                    
-                    for judet_cod in candidate_codes:
-                        target_id = f'conturJudet{judet_cod}'
-                        if target_id not in content:
-                            continue
+                        if isinstance(avertizare, list):
+                            for avertizare_item in avertizare:
+                                if isinstance(avertizare_item, dict):
+                                    for judet in avertizare_item.get('judet', []):
+                                        if isinstance(judet, dict):
+                                            try:
+                                                avertizare_judet = {
+                                                    "judet": judet.get('@attributes', {}).get('cod', 'necunoscut'),
+                                                    "culoare": judet.get('@attributes', {}).get('culoare', 'necunoscut'),
+                                                    "fenomene_vizate": avertizare_item.get('@attributes', {}).get('fenomeneVizate', 'necunoscut'),
+                                                    "data_expirarii": avertizare_item.get('@attributes', {}).get('dataExpirarii', 'necunoscut'),
+                                                    "data_aparitiei": avertizare_item.get('@attributes', {}).get('dataAparitiei', 'necunoscut'),
+                                                    "intervalul": avertizare_item.get('@attributes', {}).get('intervalul', 'necunoscut'),
+                                                    "mesaj": avertizare_item.get('@attributes', {}).get('mesaj', 'necunoscut'),
+                                                    "id_avertizare": avertizare_item.get('@attributes', {}).get('idAvertizare', 'necunoscut')
+                                                }
+                                                toate_avertizarile.append(avertizare_judet)
+                                            except KeyError as e:
+                                                _LOGGER.error(f"Eroare la procesarea datelor pentru județ: {e}")
+                                        else:
+                                            _LOGGER.error("Judete nu este un dicționar, s-a primit: %s", type(judet))
+                                else:
+                                    _LOGGER.error("Avertizare nu este un dicționar, s-a primit: %s", type(avertizare_item))
+                        else:
+                            _LOGGER.error("Avertizare nu este un dicționar sau o listă validă, s-a primit: %s", type(avertizare))
                         
-                        # Verifică dacă are fill colorat
-                        pattern = rf'{target_id}[^>]*(?:style="[^"]*fill:\s*([^;"]+)|class="([^"]+))'
-                        match = re.search(pattern, content)
-                        if match:
-                            fill_val = (match.group(1) or match.group(2) or "").lower()
-                            if any(c in fill_val for c in ['#ffff00', 'rgb(255,255,0)', '#ff6600', '#ff0000', '#b4b4b4', 'galben', 'portocaliu', 'rosu']):
-                                colored.append(judet_cod)
-                    
-                    return colored
+                        # Păstrăm datele complete intern
+                        self._raw_data = toate_avertizarile
+                        
+                        if toate_avertizarile:
+                            self._state = "active"
+                            # În atribute stocăm doar un rezumat pentru a nu depăși limita de 16KB
+                            judete_afectate = {}
+                            for av in toate_avertizarile:
+                                jud = av.get('judet', 'necunoscut')
+                                culoare = av.get('culoare', '0')
+                                if jud not in judete_afectate or int(culoare) > int(judete_afectate[jud]):
+                                    judete_afectate[jud] = culoare
+                            
+                            self._attributes = {
+                                "numar_avertizari": len(toate_avertizarile),
+                                "judete_afectate": len(judete_afectate),
+                                "judete_coduri": judete_afectate,
+                                "friendly_name": "Avertizări Meteo ANM"
+                            }
+                        else:
+                            self._state = "inactive"
+                            self._attributes = {
+                                "numar_avertizari": 0,
+                                "judete_afectate": 0,
+                                "mesaj": "Nu exista avertizari",
+                                "friendly_name": "Avertizări Meteo ANM"
+                            }
+                        # Salvăm în cache
+                        await self._save_to_cache()
+                        _LOGGER.info("Senzor ANM actualizat cu succes.")
+                    else:
+                        _LOGGER.error(f"Eroare HTTP {response.status} la preluarea datelor ANM")
+                        # Încercăm să încărcăm din cache
+                        await self._load_from_cache()
         except Exception as e:
-            _LOGGER.debug(f"Eroare parsare hartă {map_id}: {e}")
-            return colored
+            _LOGGER.error(f"Eroare la actualizarea datelor ANM: {e}")
+            # Încercăm să încărcăm din cache
+            await self._load_from_cache()
 
-    @staticmethod
-    def _clean_html(text):
-        if not text:
-            return ""
-        text = re.sub(r"<br\s*/?>", "\n", text, flags=re.IGNORECASE)
-        text = re.sub(r"</p>", "\n", text, flags=re.IGNORECASE)
-        text = re.sub(r"<[^>]+>", "", text)
-        text = text.replace("&nbsp;", " ").replace("&ndash;", "-")
-        text = re.sub(r"\n\s*\n", "\n\n", text)
-        return text.strip()
+    async def _save_to_cache(self):
+        """Salvează datele în cache."""
+        try:
+            # Creăm directorul de cache dacă nu există
+            os.makedirs(CACHE_DIR, exist_ok=True)
+            cache_data = {
+                "state": self._state,
+                "attributes": self._attributes,
+                "raw_data": self._raw_data
+            }
+            with open(CACHE_FILE, 'w') as f:
+                json.dump(cache_data, f)
+            _LOGGER.debug("Date salvate în cache")
+        except Exception as e:
+            _LOGGER.error(f"Eroare la salvarea în cache: {e}")
 
-    @staticmethod
-    def _normalize_name(text):
-        if not text:
-            return ""
-        normalized = text.lower()
-        normalized = normalized.replace("ş", "ș").replace("ţ", "ț")
-        normalized = normalized.replace("ă", "a").replace("â", "a").replace("î", "i")
-        normalized = normalized.replace("ș", "s").replace("ț", "t")
-        normalized = re.sub(r"[^a-z0-9 ]+", " ", normalized)
-        normalized = re.sub(r"\s+", " ", normalized).strip()
-        return normalized
-
-    def _normalize_alerts(self, alerts):
-        """Normalizează alertele; informările fără județ devin naționale (toate județele)."""
-        if not isinstance(alerts, list):
-            return []
-
-        normalized = []
-        for item in alerts:
-            if not isinstance(item, dict):
-                continue
-
-            msg = item.get("mesaj", "") or item.get("text", "")
-            color_raw = item.get("culoare", item.get("cod", 0))
-            try:
-                color_val = int(color_raw)
-            except Exception:  # pragma: no cover - defensive
-                color_val = 0
-
-            judete_list = item.get("judete") if isinstance(item.get("judete"), list) else None
-            if judete_list:
-                for j in judete_list:
-                    normalized.append({"judet": j, "culoare": color_val, "mesaj": msg})
-                continue
-
-            judet = item.get("judet")
-            if judet:
-                normalized.append({"judet": judet, "culoare": color_val, "mesaj": msg})
-                continue
-
-            # Informare generală fără județe specificate -> replică pe toate județele
-            for code in JUDETE:
-                normalized.append({"judet": code, "culoare": color_val, "mesaj": msg})
-
-        return normalized
+    async def _load_from_cache(self):
+        """Încarcă datele din cache."""
+        try:
+            if os.path.exists(CACHE_FILE):
+                with open(CACHE_FILE, 'r') as f:
+                    cache_data = json.load(f)
+                self._state = cache_data.get("state", "inactive")
+                self._attributes = cache_data.get("attributes", {})
+                self._raw_data = cache_data.get("raw_data", [])
+                _LOGGER.info("Date încărcate din cache")
+                return True
+        except Exception as e:
+            _LOGGER.error(f"Eroare la încărcarea din cache: {e}")
+        return False
 
 
 class ANMAlertIDSensor(Entity):
-    """Senzor pentru lista de ID-uri de avertizare active."""
+    """Senzor pentru ID-urile alertelor ANM."""
 
     def __init__(self, hass):
         self._hass = hass
@@ -513,55 +217,97 @@ class ANMAlertIDSensor(Entity):
 
     @property
     def icon(self):
-        return "mdi:numeric"
+        return "mdi:identifier"
 
     @property
     def unique_id(self):
         return "anm_avertizare_id"
 
     async def async_update(self, now=None):
-        """Extrage ID-urile de avertizare din pagina HTML ANM."""
         _LOGGER.debug("Actualizare ID-uri Avertizări ANM")
         try:
             async with async_timeout.timeout(10):
-                session = async_get_clientsession(self._hass, verify_ssl=False)
-                headers = {
-                    "User-Agent": (
-                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                        "AppleWebKit/537.36 (KHTML, like Gecko) "
-                        "Chrome/120.0.0.0 Safari/537.36"
-                    )
-                }
-                async with session.get(HTML_URL, headers=headers) as response:
-                    if response.status != 200:
-                        _LOGGER.error(
-                            "Eroare HTTP %s la preluarea paginii ANM", response.status
-                        )
-                        return
-
-                    html_content = await response.text()
-                    pattern = r"id_avertizare=(\d+)"
-                    ids = list(set(re.findall(pattern, html_content)))
-
-                    if ids:
-                        ids_sorted = sorted(ids, key=int, reverse=True)
-                        self._state = ",".join(ids_sorted)
-                        self._attributes = {
-                            "id_list": ids_sorted,
-                            "numar_id": len(ids_sorted),
-                            "friendly_name": "ANM Avertizare ID",
-                        }
-                        _LOGGER.info("ID-uri ANM găsite: %s", self._state)
+                session = async_get_clientsession(self._hass)
+                async with session.get(JSON_URL) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        
+                        # Extragem ID-urile din JSON
+                        ids = set()
+                        avertizare = data.get('avertizare', None)
+                        if isinstance(avertizare, dict):
+                            avertizare = [avertizare]
+                        
+                        if isinstance(avertizare, list):
+                            for avertizare_item in avertizare:
+                                if isinstance(avertizare_item, dict):
+                                    id_avert = avertizare_item.get('@attributes', {}).get('idAvertizare', None)
+                                    if id_avert:
+                                        ids.add(str(id_avert))
+                        
+                        if ids:
+                            # Sortează ID-urile și le unește cu virgulă
+                            ids_sorted = sorted(list(ids), key=int, reverse=True)
+                            self._state = ','.join(ids_sorted)
+                            self._attributes = {
+                                "id_list": ids_sorted,
+                                "numar_id": len(ids_sorted),
+                                "friendly_name": "ANM Avertizare ID"
+                            }
+                            # Salvăm în cache
+                            await self._save_to_cache()
+                            _LOGGER.info(f"ID-uri ANM găsite: {self._state}")
+                        else:
+                            self._state = "0"
+                            self._attributes = {
+                                "id_list": [],
+                                "numar_id": 0,
+                                "friendly_name": "ANM Avertizare ID"
+                            }
+                            _LOGGER.info("Nu s-au găsit ID-uri ANM active")
                     else:
-                        self._state = "0"
-                        self._attributes = {
-                            "id_list": [],
-                            "numar_id": 0,
-                            "friendly_name": "ANM Avertizare ID",
-                        }
-                        _LOGGER.info("Nu s-au găsit ID-uri ANM active")
-        except Exception as exc:  # pragma: no cover - runtime log
-            _LOGGER.error("Eroare la actualizarea ID-urilor ANM: %s", exc)
+                        _LOGGER.error(f"Eroare HTTP {response.status} la preluarea datelor ANM")
+                        # Încercăm să încărcăm din cache
+                        await self._load_from_cache()
+        except Exception as e:
+            _LOGGER.error(f"Eroare la actualizarea ID-urilor ANM: {e}")
+            # Încercăm să încărcăm din cache
+            await self._load_from_cache()
+
+    async def _save_to_cache(self):
+        """Salvează ID-urile în cache."""
+        try:
+            # Creăm directorul de cache dacă nu există
+            os.makedirs(CACHE_DIR, exist_ok=True)
+            cache_file = CACHE_FILE.replace('.json', '_ids.json')
+            cache_data = {
+                "state": self._state,
+                "attributes": self._attributes
+            }
+            with open(cache_file, 'w') as f:
+                json.dump(cache_data, f)
+            _LOGGER.debug("ID-uri salvate în cache")
+        except Exception as e:
+            _LOGGER.error(f"Eroare la salvarea ID-urilor în cache: {e}")
+
+    async def _load_from_cache(self):
+        """Încarcă ID-urile din cache."""
+        try:
+            cache_file = CACHE_FILE.replace('.json', '_ids.json')
+            if os.path.exists(cache_file):
+                with open(cache_file, 'r') as f:
+                    cache_data = json.load(f)
+                self._state = cache_data.get("state", "0")
+                self._attributes = cache_data.get("attributes", {
+                    "id_list": [],
+                    "numar_id": 0,
+                    "friendly_name": "ANM Avertizare ID"
+                })
+                _LOGGER.info("ID-uri încărcate din cache")
+                return True
+        except Exception as e:
+            _LOGGER.error(f"Eroare la încărcarea ID-urilor din cache: {e}")
+        return False
 
 
 class ANMMessageSensor(Entity):
@@ -573,11 +319,7 @@ class ANMMessageSensor(Entity):
         self._judet_nume = judet_nume
         self._alert_sensor = alert_sensor
         self._state = "liniste"
-        self._attributes = {
-            "tip_cod": "Verde",
-            "mesaj_complet": f"Nu sunt avertizări active pentru județul {self._judet_nume}.",
-            "friendly_name": f"Mesaj Meteo {self._judet_nume}",
-        }
+        self._attributes = {}
 
     @property
     def name(self):
@@ -601,103 +343,101 @@ class ANMMessageSensor(Entity):
 
     @property
     def available(self):
+        """Sensor is available only if alert sensor has valid data."""
         return self._alert_sensor.state not in [None, "unknown", "unavailable"]
 
     async def async_update(self, now=None):
+        """Update se face automat când alert_sensor are date noi."""
         await self._process_alerts()
 
     async def _process_alerts(self):
         """Procesează alertele pentru județul selectat."""
-        avertizari = self._alert_sensor.extra_state_attributes.get("avertizari")
-        if not avertizari:
+        # Folosim _raw_data în loc de atribute pentru a prelua datele complete
+        if not hasattr(self._alert_sensor, '_raw_data') or not self._alert_sensor._raw_data:
             self._state = "liniste"
             self._attributes = {
                 "tip_cod": "Verde",
                 "mesaj_complet": f"Nu sunt avertizări active pentru județul {self._judet_nume}.",
-                "friendly_name": f"Mesaj Meteo {self._judet_nume}",
+                "friendly_name": f"Mesaj Meteo {self._judet_nume}"
             }
             return
 
-        if isinstance(avertizari, str):
-            self._state = "liniste"
-            self._attributes = {
-                "tip_cod": "Verde",
-                "mesaj_complet": avertizari,
-                "friendly_name": f"Mesaj Meteo {self._judet_nume}",
-            }
-            return
-
-        # Filtrează alertele pentru județul specific + informările naționale
-        gl_list = [a for a in avertizari if a.get("judet") == self._judet_cod or a.get("judet") == "NATIONAL"]
+        avertizari = self._alert_sensor._raw_data
+        
+        # Filtrăm alertele pentru județul curent
+        gl_list = [a for a in avertizari if a.get('judet') == self._judet_cod]
+        
         if not gl_list:
             self._state = "liniste"
             self._attributes = {
                 "tip_cod": "Verde",
                 "mesaj_complet": f"Nu sunt avertizări active pentru județul {self._judet_nume}.",
-                "friendly_name": f"Mesaj Meteo {self._judet_nume}",
+                "friendly_name": f"Mesaj Meteo {self._judet_nume}"
             }
             return
-
+        
         self._state = "alerta"
-        max_code = max([int(a.get("culoare", 0)) for a in gl_list])
+        
+        # Calculăm cel mai grav cod
+        max_code = max([int(a.get('culoare', 0)) for a in gl_list])
         tip_cod_map = {3: "Rosu", 2: "Portocaliu", 1: "Galben", 0: "Verde"}
         tip_cod = tip_cod_map.get(max_code, "Verde")
-
+        
+        # Construim mesajul complet
         mesaje = []
         for item in gl_list:
-            msg_raw = item.get("mesaj", "")
-            msg_raw = msg_raw.replace("<br />", "\n").replace("</p>", "\n")
-            msg_raw = re.sub(r"<[^>]*>", "", msg_raw)
-            msg_raw = msg_raw.replace("&nbsp;", " ").replace("&ndash;", "-").strip()
-
-            cod = int(item.get("culoare", 0))
-            if cod == 1:
-                msg_raw = re.sub(r"COD PORTOCALIU[\s\S]*?(?=COD|$)", "", msg_raw, flags=re.IGNORECASE)
-                msg_raw = re.sub(r"COD RO[SȘ]U[\s\S]*?(?=COD|$)", "", msg_raw, flags=re.IGNORECASE)
-            elif cod == 2:
-                msg_raw = re.sub(r"COD GALBEN[\s\S]*?(?=COD|$)", "", msg_raw, flags=re.IGNORECASE)
-                msg_raw = re.sub(r"COD RO[SȘ]U[\s\S]*?(?=COD|$)", "", msg_raw, flags=re.IGNORECASE)
-            elif cod == 3:
-                msg_raw = re.sub(r"COD GALBEN[\s\S]*?(?=COD|$)", "", msg_raw, flags=re.IGNORECASE)
-                msg_raw = re.sub(r"COD PORTOCALIU[\s\S]*?(?=COD|$)", "", msg_raw, flags=re.IGNORECASE)
-
-            msg_final = re.sub(r"\n\s*\n", "\n\n", msg_raw).strip()
+            msg_raw = item.get('mesaj', '')
+            
+            # Curățăm HTML-ul
+            msg_raw = msg_raw.replace('<br />', '\n').replace('</p>', '\n')
+            msg_raw = re.sub(r'<[^>]*>', '', msg_raw)
+            msg_raw = msg_raw.replace('&nbsp;', ' ').replace('&ndash;', '-').strip()
+            
+            # Filtrăm mesajul pe baza culorii
+            cod = int(item.get('culoare', 0))
+            
+            if cod == 1:  # Galben
+                msg_raw = re.sub(r'COD PORTOCALIU[\s\S]*?(?=COD|$)', '', msg_raw, flags=re.IGNORECASE)
+                msg_raw = re.sub(r'COD RO[SȘ]U[\s\S]*?(?=COD|$)', '', msg_raw, flags=re.IGNORECASE)
+            elif cod == 2:  # Portocaliu
+                msg_raw = re.sub(r'COD GALBEN[\s\S]*?(?=COD|$)', '', msg_raw, flags=re.IGNORECASE)
+                msg_raw = re.sub(r'COD RO[SȘ]U[\s\S]*?(?=COD|$)', '', msg_raw, flags=re.IGNORECASE)
+            elif cod == 3:  # Roșu
+                msg_raw = re.sub(r'COD GALBEN[\s\S]*?(?=COD|$)', '', msg_raw, flags=re.IGNORECASE)
+                msg_raw = re.sub(r'COD PORTOCALIU[\s\S]*?(?=COD|$)', '', msg_raw, flags=re.IGNORECASE)
+            
+            # Curățăm rânduri goale duble
+            msg_final = re.sub(r'\n\s*\n', '\n\n', msg_raw).strip()
             mesaje.append(msg_final)
-
-        mesaj_complet = "\n\n".join(mesaje).strip()
+        
+        mesaj_complet = '\n\n'.join(mesaje).strip()
+        
         self._attributes = {
             "tip_cod": tip_cod,
-            "mesaj_complet": mesaj_complet
-            if mesaj_complet
-            else f"Nu sunt avertizări active pentru județul {self._judet_nume}.",
-            "friendly_name": f"Mesaj Meteo {self._judet_nume}",
+            "mesaj_complet": mesaj_complet if mesaj_complet else f"Nu sunt avertizări active pentru județul {self._judet_nume}.",
+            "friendly_name": f"Mesaj Meteo {self._judet_nume}"
         }
-
-        _LOGGER.info(
-            "Mesaj meteo actualizat pentru %s: %s (%s)",
-            self._judet_nume,
-            self._state,
-            tip_cod,
-        )
+        
+        _LOGGER.info(f"Mesaj meteo actualizat pentru {self._judet_nume}: {self._state} ({tip_cod})")
 
 
-class ANMMapDownloadSensor(Entity):
-    """Senzor care descarcă automat hărțile ANM în /config/www/."""
+class ANMMapSensor(Entity):
+    """Senzor pentru URL-ul hărții meteo active."""
 
-    def __init__(self, hass, id_sensor, auto_download=True):
+    def __init__(self, hass, judet_cod, judet_nume, id_sensor):
         self._hass = hass
+        self._judet_cod = judet_cod
+        self._judet_nume = judet_nume
         self._id_sensor = id_sensor
-        self._auto_download = auto_download
-        self._state = "idle"
-        self._attributes = {
-            "friendly_name": "Descărcare Hărți ANM",
-            "descarcari_reusite": [],
-            "descarcari_esuate": [],
-        }
+        self._state = None
+        self._attributes = {}
+        
+        import time
+        self._timestamp = int(time.time())
 
     @property
     def name(self):
-        return "Descărcare Hărți ANM"
+        return "Harta Meteo Activă"
 
     @property
     def state(self):
@@ -709,86 +449,51 @@ class ANMMapDownloadSensor(Entity):
 
     @property
     def icon(self):
-        return "mdi:download"
+        return "mdi:map-legend"
 
     @property
     def unique_id(self):
-        return "anm_descarcare_harti"
+        return f"anm_harta_meteo_{self._judet_cod.lower()}"
 
     async def async_update(self, now=None):
+        """Actualizare URL hartă în funcție de ID-urile active."""
         sensor_ids = self._id_sensor.state
-        if not sensor_ids or sensor_ids in ["unknown", "unavailable", "0", ""]:
-            self._state = "idle"
-            self._attributes.update({
-                "ids_detectate": sensor_ids if sensor_ids else "0",
-                "descarcari_reusite": [],
-                "descarcari_esuate": [],
-            })
-            return
-
-        ids_list = [x.strip() for x in sensor_ids.split(",") if x.strip()]
-        if not ids_list:
-            self._state = "idle"
-            self._attributes.update({
-                "ids_detectate": sensor_ids,
-                "descarcari_reusite": [],
-                "descarcari_esuate": [],
-            })
-            return
-
-        target_dir = self._hass.config.path("www")
-        os.makedirs(target_dir, exist_ok=True)
-
-        succes = []
-        esuate = []
-
-        session = async_get_clientsession(self._hass, verify_ssl=False)
-
-        for map_id in ids_list:
-            url = (
-                "https://www.meteoromania.ro/wp-content/plugins/meteo/harti/"
-                f"harta.svg.php?id_avertizare={map_id}"
-            )
-            filename = os.path.join(target_dir, f"harta_anm_{map_id}.svg")
-
-            try:
-                async with async_timeout.timeout(10):
-                    async with session.get(url) as resp:
-                        if resp.status != 200:
-                            esuate.append({"id": map_id, "status": resp.status})
-                            continue
-                        content = await resp.read()
-
-                def _write_file(path, data):
-                    with open(path, "wb") as file_handle:
-                        file_handle.write(data)
-
-                await self._hass.async_add_executor_job(_write_file, filename, content)
-                succes.append(filename)
-            except Exception as exc:  # pragma: no cover - runtime log
-                esuate.append({"id": map_id, "eroare": str(exc)})
-
-        self._state = len(succes)
-        self._attributes.update({
-            "ids_detectate": ids_list,
-            "descarcari_reusite": succes,
-            "descarcari_esuate": esuate,
-            "folder": target_dir,
-            "friendly_name": "Descărcare Hărți ANM",
-        })
+        
+        # Actualizăm timestamp-ul pentru cache busting
+        import time
+        self._timestamp = int(time.time())
+        
+        if sensor_ids and sensor_ids not in ['unknown', 'unavailable', '0', '']:
+            # Preluăm primul ID din listă
+            first_id = sensor_ids.split(',')[0]
+            self._state = f"https://images.weserv.nl/?url=www.meteoromania.ro/wp-content/plugins/meteo/harti/harta.svg.php?id_avertizare={first_id}"
+            url_direct = f"https://www.meteoromania.ro/wp-content/plugins/meteo/harti/harta.svg.php?id_avertizare={first_id}"
+        else:
+            # Fallback la harta generală
+            self._state = f"https://images.weserv.nl/?url=www.meteoromania.ro/images/avertizari/harta.png&v={self._timestamp}"
+            url_direct = "https://www.meteoromania.ro/images/avertizari/harta.png"
+        
+        self._attributes = {
+            "ids_detectate": sensor_ids if sensor_ids else "0",
+            "url_direct_anm": url_direct,
+            "judet_selectat": self._judet_nume,
+            "judet_cod": self._judet_cod,
+            "friendly_name": "Harta Meteo Activă"
+        }
+        
+        _LOGGER.debug(f"Hartă meteo actualizată pentru {self._judet_nume}: {self._state}")
 
 
 class ANMMapColorSensor(Entity):
     """Senzor pentru culoarea județului pe hartă."""
 
-    def __init__(self, hass, judet_cod, judet_nume, id_sensor):
+    def __init__(self, hass, judet_cod, judet_nume, alert_sensor):
         self._hass = hass
         self._judet_cod = judet_cod
         self._judet_nume = judet_nume
-        self._id_sensor = id_sensor
+        self._alert_sensor = alert_sensor
         self._state = "verde"
         self._attributes = {}
-        self._entity_picture = None
 
     @property
     def name(self):
@@ -806,11 +511,11 @@ class ANMMapColorSensor(Entity):
     def icon(self):
         if self._state == "rosu":
             return "mdi:alert-octagon"
-        if self._state == "portocaliu":
+        elif self._state == "portocaliu":
             return "mdi:alert"
-        if self._state == "galben":
+        elif self._state == "galben":
             return "mdi:alert-circle"
-        if self._state == "informare":
+        elif self._state == "informare":
             return "mdi:information"
         return "mdi:check-circle"
 
@@ -818,102 +523,48 @@ class ANMMapColorSensor(Entity):
     def unique_id(self):
         return f"anm_culoare_harta_{self._judet_cod.lower()}"
 
-    @property
-    def entity_picture(self):
-        """Returnează URL-ul hărții cu prioritate cea mai mare."""
-        return self._entity_picture
-        max_priority = 0
-        max_id = None
-        
-        for map_id, color in date_harti.items():
-            if priority.get(color, 0) > max_priority:
-                max_priority = priority.get(color, 0)
-                max_id = map_id
-        
-        # Returnează URL-ul local al hărții (informare inclusă)
-        if max_id and max_priority > 0:
-            return f"/local/harta_anm_{max_id}.svg"
-        
-        return None
-
     async def async_update(self, now=None):
-        """Actualizare culoare prin apelarea scriptului check_map.py."""
-        sensor_ids = self._id_sensor.state
-
-        if not sensor_ids or sensor_ids in ["unknown", "unavailable", "0", ""]:
+        """Actualizează culoarea pe baza datelor din API JSON."""
+        # Folosim direct datele din alert_sensor._raw_data
+        if not hasattr(self._alert_sensor, '_raw_data') or not self._alert_sensor._raw_data:
             self._state = "verde"
-            self._entity_picture = None
             self._attributes = {
-                "date_harti": {},
                 "judet_cod": self._judet_cod,
-                "friendly_name": f"Culoare Hartă {self._judet_nume}",
+                "friendly_name": f"Culoare Hartă {self._judet_nume}"
             }
             return
-
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-        script_path = os.path.join(script_dir, "check_map.py")
-
-        try:
-            process = await asyncio.create_subprocess_exec(
-                "python3",
-                script_path,
-                sensor_ids,
-                self._judet_cod,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
-
-            stdout, stderr = await process.communicate()
-
-            if process.returncode == 0:
-                result = json.loads(stdout.decode())
-                date_harti = result.get("date_harti", {})
-                
-                _LOGGER.info(
-                    "check_map.py output pentru %s: %s", 
-                    self._judet_nume, date_harti
-                )
-
-                priority = {"rosu": 4, "portocaliu": 3, "galben": 2, "informare": 1, "verde": 0}
-                max_color = "verde"
-                max_priority = 0
-                max_id = None
-
-                for map_id, color in date_harti.items():
-                    if priority.get(color, 0) > max_priority:
-                        max_priority = priority.get(color, 0)
-                        max_color = color
-                        max_id = map_id
-
-                self._state = max_color
-                
-                # Setează entity_picture pentru culori non-verde (inclusiv informare)
-                if max_id and max_priority > 0:
-                    self._entity_picture = f"/local/harta_anm_{max_id}.svg"
-                else:
-                    self._entity_picture = None
-                
-                self._attributes = {
-                    "date_harti": date_harti,
-                    "numar_harti_verificate": len(date_harti),
-                    "judet_cod": self._judet_cod,
-                    "friendly_name": f"Culoare Hartă {self._judet_nume}",
-                }
-                
-                # Adaugă URL-ul hărții în atribute pentru referință
-                if self._entity_picture:
-                    self._attributes["entity_picture"] = self._entity_picture
-
-                _LOGGER.info(
-                    "Culoare hartă pentru %s: %s (harta: %s)", 
-                    self._judet_nume, self._state, self._entity_picture
-                )
-            else:
-                _LOGGER.error("Eroare la rularea check_map.py: %s", stderr.decode())
-                self._state = "necunoscut"
-                self._entity_picture = None
-
-        except Exception as exc:  # pragma: no cover - runtime log
-            _LOGGER.error("Eroare la verificarea culorii hărții: %s", exc)
+        
+        # Filtrăm alertele pentru județul curent
+        alerte_judet = [a for a in self._alert_sensor._raw_data if a.get('judet') == self._judet_cod]
+        
+        if not alerte_judet:
+            self._state = "verde"
+            self._attributes = {
+                "judet_cod": self._judet_cod,
+                "friendly_name": f"Culoare Hartă {self._judet_nume}"
+            }
+            return
+        
+        # Determinăm cea mai gravă culoare (valoare numerică: 0=verde, 1=galben, 2=portocaliu, 3=rosu)
+        max_culoare = 0
+        for alerta in alerte_judet:
+            try:
+                culoare_val = int(alerta.get('culoare', 0))
+                if culoare_val > max_culoare:
+                    max_culoare = culoare_val
+            except (ValueError, TypeError):
+                continue
+        
+        # Convertim valoarea numerică în text
+        culoare_map = {0: "verde", 1: "galben", 2: "portocaliu", 3: "rosu"}
+        self._state = culoare_map.get(max_culoare, "verde")
+        
+        self._attributes = {
+            "numar_alerte": len(alerte_judet),
+            "judet_cod": self._judet_cod,
+            "cod_culoare": max_culoare,
+            "friendly_name": f"Culoare Hartă {self._judet_nume}"
+        }
+        
+        _LOGGER.info(f"Culoare hartă pentru {self._judet_nume}: {self._state} (cod: {max_culoare})")
             self._state = "necunoscut"
-            self._entity_picture = None
