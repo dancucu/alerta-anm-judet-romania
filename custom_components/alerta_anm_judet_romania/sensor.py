@@ -59,8 +59,6 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
         map_color_sensor,
     ]
     async_add_entities(entities, update_before_add=True)
-        return True
-        async_track_time_interval(hass, _periodic_update, update_interval)
 class ANMGeneralMessageSensor(Entity):
     """Senzor pentru mesajul meteo general (toate avertizările)."""
 
@@ -133,12 +131,6 @@ class ANMGeneralMessageSensor(Entity):
             "friendly_name": "Mesaj Meteo General",
         }
 
-    async def _periodic_update(now):
-        for entity in entities:
-            entity.async_schedule_update_ha_state(True)
-
-    async_track_time_interval(hass, _periodic_update, update_interval)
-    return True
 
 
 class ANMAlertSensor(Entity):
