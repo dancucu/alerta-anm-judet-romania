@@ -190,7 +190,7 @@ class ANMAlertSensor(Entity):
                 # 3) Ambele au eșuat: încearcă să încarci din cache persistent
                 loaded = await self._load_from_cache()
                 if loaded:
-                    _LOGGER.warning("Ambele surse ANM au eșuat, dar am încărcat datele din cache persistent.")
+                    _LOGGER.warning("Sursa ANM (API JSON) a eșuat, am încărcat datele din cache persistent.")
                     return
                 # Dacă nu există cache persistent, fallback la in-memory
                 if prev_attrs:
