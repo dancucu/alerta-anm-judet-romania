@@ -57,7 +57,9 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
 
 
 class ANMAlertSensor(Entity):
-    """Senzor pentru lista de avertizări generale ANM."""
+    """Senzor pentru lista de avertizări generale ANM cu cache persistent async."""
+
+    _CACHE_FILE = ".anm_alert_cache.json"  # comun pentru toți senzorii
 
     def __init__(self, hass, id_sensor=None):
         self._hass = hass
@@ -69,6 +71,39 @@ class ANMAlertSensor(Entity):
         self._active_source = None  # 'json' sau 'html'
         self._last_api_check = 0  # timestamp ultimei verificări API
         self._api_check_interval = 300  # verificăm API-ul la fiecare 5 minute când suntem pe HTML
+
+    async def _save_to_cache(self):
+        cache_data = {
+            "alert_state": self._state,
+            "alert_attrs": self._attributes,
+        }
+        cache_path = self._hass.config.path(self._CACHE_FILE)
+        def _write_cache(path, data):
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(data, f)
+        try:
+            await self._hass.async_add_executor_job(_write_cache, cache_path, cache_data)
+            _LOGGER.debug("Cache ANMAlertSensor salvat la %s", cache_path)
+        except Exception as exc:
+            _LOGGER.warning("Eroare la salvarea cache ANMAlertSensor: %s", exc)
+
+    async def _load_from_cache(self):
+        cache_path = self._hass.config.path(self._CACHE_FILE)
+        def _read_cache(path):
+            if not os.path.exists(path):
+                return None
+            with open(path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        try:
+            data = await self._hass.async_add_executor_job(_read_cache, cache_path)
+            if data:
+                self._state = data.get("alert_state")
+                self._attributes = data.get("alert_attrs", {})
+                _LOGGER.info("Date ANMAlertSensor încărcate din cache %s", cache_path)
+                return True
+        except Exception as exc:
+            _LOGGER.warning("Eroare la încărcarea cache ANMAlertSensor: %s", exc)
+        return False
 
     @property
     def name(self):
@@ -91,7 +126,7 @@ class ANMAlertSensor(Entity):
         return "anm_avertizare_generala"
 
     async def async_update(self, now=None):
-        """Actualizează avertizările cu fallback inteligent și revenire automată la API."""
+        """Actualizează avertizările cu fallback inteligent, cache persistent și revenire automată la API."""
         prev_state = self._state
         prev_attrs = self._attributes.copy()
         current_time = int(asyncio.get_event_loop().time())
@@ -100,12 +135,10 @@ class ANMAlertSensor(Entity):
             async with async_timeout.timeout(10):
                 session = async_get_clientsession(self._hass, verify_ssl=False)
 
-                # Dacă suntem pe HTML, verificăm periodic API-ul pentru a reveni la el
                 should_check_api = (
-                    self._active_source is None  # Prima rulare
-                    or self._active_source == 'json'  # Suntem pe API, continuăm cu el
-                    or (self._active_source == 'html' and 
-                        current_time - self._last_api_check >= self._api_check_interval)  # E timpul să verificăm API-ul
+                    self._active_source is None
+                    or self._active_source == 'json'
+                    or (self._active_source == 'html' and current_time - self._last_api_check >= self._api_check_interval)
                 )
 
                 # 1) Încercăm API-ul JSON (sau dacă suntem pe HTML și e timpul să verificăm)
@@ -126,10 +159,9 @@ class ANMAlertSensor(Entity):
                                     self._attributes = prev_attrs
                                     return
 
-                                # API funcționează! Rămânem pe el
                                 if self._active_source == 'html':
                                     _LOGGER.info("✓ API JSON disponibil din nou! Revenire de la HTML la API.")
-                                
+
                                 self._active_source = 'json'
                                 self._state = "alerta" if avertizari else "liniste"
                                 self._last_success_ts = current_time
@@ -140,13 +172,14 @@ class ANMAlertSensor(Entity):
                                     "sursa": "json",
                                     "sursa_activa": self._active_source,
                                 }
+                                await self._save_to_cache()
                                 return
 
                             _LOGGER.warning(
                                 "Eroare HTTP %s la API JSON; încerc fallback HTML",
                                 response.status,
                             )
-                    except Exception as exc_json:  # pragma: no cover - runtime log
+                    except Exception as exc_json:
                         _LOGGER.warning("Eroare la API JSON; încerc fallback HTML: %s", exc_json)
 
                 # 2) Fallback: pagina HTML (sau continuăm cu HTML dacă suntem deja pe el)
@@ -157,42 +190,50 @@ class ANMAlertSensor(Entity):
                         if html_ok:
                             avertizari = self._normalize_alerts(self._parse_html_alerts(html_text))
                             if avertizari or html_text:
-                                # Trecem pe HTML doar dacă API-ul a eșuat
                                 if self._active_source != 'html':
                                     _LOGGER.warning("⚠ API JSON indisponibil. Trecem pe sursa HTML.")
-                                
+
                                 self._active_source = 'html'
                                 self._state = "alerta" if avertizari else "liniste"
                                 self._last_success_ts = current_time
                                 self._attributes = {
-                                    "numar_avertizari": len(national_alerts),
-                                    "avertizari": national_alerts,  # Numai NATIONAL pentru informări generale
+                                    "numar_avertizari": len(avertizari),
+                                    "avertizari": avertizari,
                                     "friendly_name": "ANM Avertizare Generala",
                                     "sursa": "html",
                                     "sursa_activa": self._active_source,
                                     "next_api_check": current_time + self._api_check_interval,
                                 }
+                                await self._save_to_cache()
                                 return
                         _LOGGER.warning(
                             "HTTP %s la /avertizari/; păstrez ultima stare", resp_html.status
                         )
-                except Exception as exc_html:  # pragma: no cover - runtime log
+                except Exception as exc_html:
                     _LOGGER.warning(
                         "Eroare la parsarea /avertizari/: %s; păstrez ultima stare", exc_html
                     )
 
-                # 3) Ambele au eșuat: păstrăm ultima stare sau unavailable
+                # 3) Ambele au eșuat: încearcă să încarci din cache persistent
+                loaded = await self._load_from_cache()
+                if loaded:
+                    _LOGGER.warning("Ambele surse ANM au eșuat, dar am încărcat datele din cache persistent.")
+                    return
+                # Dacă nu există cache persistent, fallback la in-memory
                 if prev_attrs:
                     self._state = prev_state
                     self._attributes = prev_attrs
                 else:
                     self._state = "unavailable"
                 return
-        except Exception as exc:  # pragma: no cover - runtime log
+        except Exception as exc:
             _LOGGER.warning(
                 "Eroare la actualizarea avertizărilor generale; păstrez ultima stare: %s",
                 exc,
             )
+            loaded = await self._load_from_cache()
+            if loaded:
+                return
             if prev_attrs:
                 self._state = prev_state
                 self._attributes = prev_attrs
@@ -386,7 +427,45 @@ class ANMAlertSensor(Entity):
 
 
 class ANMAlertIDSensor(Entity):
-    """Senzor pentru lista de ID-uri de avertizare active."""
+    """Senzor pentru lista de ID-uri de avertizare active cu cache persistent async."""
+    _CACHE_FILE = ".anm_alert_cache.json"  # comun cu ANMAlertSensor
+    async def _save_to_cache(self):
+        cache_path = self._hass.config.path(self._CACHE_FILE)
+        def _update_cache(path, state, attrs):
+            data = {}
+            if os.path.exists(path):
+                try:
+                    with open(path, "r", encoding="utf-8") as f:
+                        data = json.load(f)
+                except Exception:
+                    data = {}
+            data["id_state"] = state
+            data["id_attrs"] = attrs
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(data, f)
+        try:
+            await self._hass.async_add_executor_job(_update_cache, cache_path, self._state, self._attributes)
+            _LOGGER.debug("Cache ANMAlertIDSensor salvat la %s", cache_path)
+        except Exception as exc:
+            _LOGGER.warning("Eroare la salvarea cache ANMAlertIDSensor: %s", exc)
+
+    async def _load_from_cache(self):
+        cache_path = self._hass.config.path(self._CACHE_FILE)
+        def _read_cache(path):
+            if not os.path.exists(path):
+                return None
+            with open(path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        try:
+            data = await self._hass.async_add_executor_job(_read_cache, cache_path)
+            if data and "id_state" in data:
+                self._state = data.get("id_state", "0")
+                self._attributes = data.get("id_attrs", {})
+                _LOGGER.info("Date ANMAlertIDSensor încărcate din cache %s", cache_path)
+                return True
+        except Exception as exc:
+            _LOGGER.warning("Eroare la încărcarea cache ANMAlertIDSensor: %s", exc)
+        return False
 
     def __init__(self, hass):
         self._hass = hass
@@ -414,7 +493,7 @@ class ANMAlertIDSensor(Entity):
         return "anm_avertizare_id"
 
     async def async_update(self, now=None):
-        """Extrage ID-urile de avertizare din pagina HTML ANM."""
+        """Extrage ID-urile de avertizare din pagina HTML ANM, cu cache persistent async."""
         _LOGGER.debug("Actualizare ID-uri Avertizări ANM")
         try:
             async with async_timeout.timeout(10):
@@ -431,6 +510,9 @@ class ANMAlertIDSensor(Entity):
                         _LOGGER.error(
                             "Eroare HTTP %s la preluarea paginii ANM", response.status
                         )
+                        loaded = await self._load_from_cache()
+                        if loaded:
+                            _LOGGER.warning("Am încărcat ID-urile din cache persistent.")
                         return
 
                     html_content = await response.text()
@@ -445,6 +527,7 @@ class ANMAlertIDSensor(Entity):
                             "numar_id": len(ids_sorted),
                             "friendly_name": "ANM Avertizare ID",
                         }
+                        await self._save_to_cache()
                         _LOGGER.info("ID-uri ANM găsite: %s", self._state)
                     else:
                         self._state = "0"
@@ -453,9 +536,13 @@ class ANMAlertIDSensor(Entity):
                             "numar_id": 0,
                             "friendly_name": "ANM Avertizare ID",
                         }
+                        await self._save_to_cache()
                         _LOGGER.info("Nu s-au găsit ID-uri ANM active")
-        except Exception as exc:  # pragma: no cover - runtime log
+        except Exception as exc:
             _LOGGER.error("Eroare la actualizarea ID-urilor ANM: %s", exc)
+            loaded = await self._load_from_cache()
+            if loaded:
+                _LOGGER.warning("Am încărcat ID-urile din cache persistent.")
 
 
 class ANMMessageSensor(Entity):
