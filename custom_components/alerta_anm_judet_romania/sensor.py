@@ -174,13 +174,21 @@ class ANMAlertSensor(Entity):
                             avertizari_raw = data.get("avertizari", []) if isinstance(data, dict) else []
                             avertizari = self._normalize_alerts(avertizari_raw)
 
-                            if not avertizari and prev_attrs.get("avertizari"):
-                                _LOGGER.warning(
-                                    "Răspuns ANM JSON fără avertizări; păstrez ultima stare disponibilă"
-                                )
-                                self._state = prev_state
-                                self._attributes = prev_attrs
-                                return
+                            # MODIFICARE: dacă avertizari e gol, folosește fallback din cache persistent
+                            if not avertizari:
+                                _LOGGER.warning("Răspuns ANM JSON fără avertizări; încerc fallback la cache persistent")
+                                loaded = await self._load_from_cache()
+                                if loaded:
+                                    _LOGGER.info("Fallback la cache persistent reușit (avertizări din cache)")
+                                    return
+                                else:
+                                    _LOGGER.warning("Fallback la cache persistent eșuat; păstrez ultima stare disponibilă")
+                                    if prev_attrs:
+                                        self._state = prev_state
+                                        self._attributes = prev_attrs
+                                    else:
+                                        self._state = "unavailable"
+                                    return
 
                             self._active_source = 'json'
                             self._state = "alerta" if avertizari else "liniste"
