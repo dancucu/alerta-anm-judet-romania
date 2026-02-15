@@ -191,7 +191,7 @@ class ANMAlertSensor(Entity):
                                     return
 
                             self._active_source = 'json'
-                            self._state = "alerta" if avertizari else "liniste"
+                                self._state = "alerta" if len(avertizari) > 0 else "liniste"
                             self._last_success_ts = current_time
                             self._attributes = {
                                 "numar_avertizari": len(avertizari),
