@@ -30,7 +30,6 @@ from .const import (
 _LOGGER = logging.getLogger(__name__)
 
 JSON_URL = "https://www.meteoromania.ro/wp-json/meteoapi/v2/avertizari-generale"
-HTML_URL = "https://www.meteoromania.ro/avertizari/"
 
 
 async def async_setup_entry(hass, config_entry, async_add_entities):
@@ -208,73 +207,8 @@ class ANMAlertSensor(Entity):
             else:
                 self._state = "unavailable"
 
-    def _parse_html_alerts(self, html_text):
-        """Parsează avertizările din pagina HTML /avertizari/."""
-        alerts = []
-        if not html_text:
-            return alerts
 
-        parts = re.split(r'class=["\"]alerta_meteo_produsecontent[^"\"]*["\"]', html_text)
-        if len(parts) <= 1:
-            parts = re.findall(r'<div[^>]+alerta_meteo_produsecontent[^>]*>(.*?)</div>', html_text, re.S)
-        if len(parts) <= 1:
-            parts = re.findall(r'<div[^>]+alerta[^>]+>(.*?)</div>', html_text, re.S)
-        if not parts or len(parts) <= 1:
-            return alerts
-
-        color_map = {"galben": 1, "portocaliu": 2, "rosu": 3, "informare": 0}
-
-        for part in parts[1:]:
-            color_match = re.search(r"COD\s*:?\s*(GALBEN|PORTOCALIU|ROSU|INFORMARE)", part, re.IGNORECASE)
-            color_txt = color_match.group(1).lower() if color_match else None
-            color_val = color_map.get(color_txt, 0)
-
-            counties_blocks = re.findall(r"IconiteJudeteChestii[^>]*>(.*?)</div>", part, re.S)
-            counties = []
-            for block in counties_blocks:
-                counties.extend(re.findall(r"<strong>([^<]+)</strong>", block))
-
-            # Fallback: caută numele județelor în textul curățat dacă nu există strong-uri
-            text_block_clean = self._clean_html(part).lower()
-            if not counties:
-                for code, nume in JUDETE.items():
-                    if self._normalize_name(nume) in self._normalize_name(text_block_clean):
-                        counties.append(nume)
-
-            msg_match = (
-                re.search(r"<tr><td[^>]*text-align:justify[^>]*>(.*?)</td>\s*</tr>", part, re.S)
-                or re.search(r"<td[^>]*>(.*?)</td>", part, re.S)
-                or re.search(r"<p[^>]*>(.*?)</p>", part, re.S)
-            )
-            raw_msg = msg_match.group(1) if msg_match else ""
-            msg_clean = self._clean_html(raw_msg)
-            
-            # Împarte mesajul în submesaje dacă conține mai multe coduri
-            submessages = self._split_combined_message(msg_clean)
-            
-            for submsg, subcolor in submessages:
-                self._process_single_alert(submsg, subcolor, zone_map, alerts)
-
-            if not counties:
-                # Informare națională: aplică tuturor județelor
-                for code in JUDETE:
-                    alerts.append({"judet": code, "culoare": color_val, "mesaj": msg_clean})
-                continue
-
-            seen = set()
-            for county_name in counties:
-                key = county_name.strip().lower()
-                norm_key = self._normalize_name(key)
-                code = self._judet_name_to_code.get(key, self._judet_name_to_code.get(norm_key, county_name.strip()))
-                dedup_key = (code, msg_clean)
-                if dedup_key in seen:
-                    continue
-                seen.add(dedup_key)
-                alerts.append({
-                    "judet": code,
-                    "culoare": color_val,
-                    "mesaj": msg_clean,
-                })
+    # Metoda _parse_html_alerts și orice fallback HTML au fost eliminate complet.
 
     def _filter_by_map_sync(self, candidate_codes):
         """Filtrează județele candidate verificând culoarea pe hărțile active (sync)."""
@@ -461,56 +395,17 @@ class ANMAlertIDSensor(Entity):
         return "anm_avertizare_id"
 
     async def async_update(self, now=None):
-        """Extrage ID-urile de avertizare din pagina HTML ANM, cu cache persistent async."""
-        _LOGGER.debug("Actualizare ID-uri Avertizări ANM")
-        try:
-            async with async_timeout.timeout(10):
-                session = async_get_clientsession(self._hass, verify_ssl=False)
-                headers = {
-                    "User-Agent": (
-                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                        "AppleWebKit/537.36 (KHTML, like Gecko) "
-                        "Chrome/120.0.0.0 Safari/537.36"
-                    )
-                }
-                async with session.get(HTML_URL, headers=headers) as response:
-                    if response.status != 200:
-                        _LOGGER.error(
-                            "Eroare HTTP %s la preluarea paginii ANM", response.status
-                        )
-                        loaded = await self._load_from_cache()
-                        if loaded:
-                            _LOGGER.warning("Am încărcat ID-urile din cache persistent.")
-                        return
-
-                    html_content = await response.text()
-                    pattern = r"id_avertizare=(\d+)"
-                    ids = list(set(re.findall(pattern, html_content)))
-
-                    if ids:
-                        ids_sorted = sorted(ids, key=int, reverse=True)
-                        self._state = ",".join(ids_sorted)
-                        self._attributes = {
-                            "id_list": ids_sorted,
-                            "numar_id": len(ids_sorted),
-                            "friendly_name": "ANM Avertizare ID",
-                        }
-                        await self._save_to_cache()
-                        _LOGGER.info("ID-uri ANM găsite: %s", self._state)
-                    else:
-                        self._state = "0"
-                        self._attributes = {
-                            "id_list": [],
-                            "numar_id": 0,
-                            "friendly_name": "ANM Avertizare ID",
-                        }
-                        await self._save_to_cache()
-                        _LOGGER.info("Nu s-au găsit ID-uri ANM active")
-        except Exception as exc:
-            _LOGGER.error("Eroare la actualizarea ID-urilor ANM: %s", exc)
-            loaded = await self._load_from_cache()
-            if loaded:
-                _LOGGER.warning("Am încărcat ID-urile din cache persistent.")
+        """Actualizare ID-uri ANM dezactivată (fără fallback HTML)."""
+        _LOGGER.warning("Actualizarea ID-urilor ANM din HTML a fost dezactivată. Senzorul nu va returna date noi.")
+        loaded = await self._load_from_cache()
+        if loaded:
+            return
+        self._state = "0"
+        self._attributes = {
+            "id_list": [],
+            "numar_id": 0,
+            "friendly_name": "ANM Avertizare ID (dezactivat)",
+        }
 
 
 class ANMMessageSensor(Entity):
