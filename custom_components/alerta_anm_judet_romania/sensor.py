@@ -173,6 +173,9 @@ class ANMAlertSensor(Entity):
                             data = await response.json()
                             avertizari_raw = data.get("avertizari", []) if isinstance(data, dict) else []
                             avertizari = self._normalize_alerts(avertizari_raw)
+                            _LOGGER.warning("[DEBUG] avertizari_raw (API): %s", avertizari_raw)
+                            _LOGGER.warning("[DEBUG] avertizari normalizate (API): %s", avertizari)
+                            _LOGGER.warning("[DEBUG] numar_avertizari (API): %d", len(avertizari))
 
                             # MODIFICARE: dacă avertizari e gol, folosește fallback din cache persistent
                             if not avertizari:
@@ -180,6 +183,10 @@ class ANMAlertSensor(Entity):
                                 loaded = await self._load_from_cache()
                                 if loaded:
                                     _LOGGER.info("Fallback la cache persistent reușit (avertizări din cache)")
+                                    # Log și avertizările din cache
+                                    cache_avertizari = self._attributes.get("avertizari", [])
+                                    _LOGGER.warning("[DEBUG] avertizari din cache: %s", cache_avertizari)
+                                    _LOGGER.warning("[DEBUG] numar_avertizari (cache): %d", len(cache_avertizari))
                                     return
                                 else:
                                     _LOGGER.warning("Fallback la cache persistent eșuat; păstrez ultima stare disponibilă")
@@ -216,6 +223,10 @@ class ANMAlertSensor(Entity):
                 loaded = await self._load_from_cache()
                 if loaded:
                     _LOGGER.warning("Sursa ANM (API JSON) a eșuat, am încărcat datele din cache persistent.")
+                    # Log și avertizările din cache
+                    cache_avertizari = self._attributes.get("avertizari", [])
+                    _LOGGER.warning("[DEBUG] avertizari din cache: %s", cache_avertizari)
+                    _LOGGER.warning("[DEBUG] numar_avertizari (cache): %d", len(cache_avertizari))
                     return
                 # Dacă nu există cache persistent, fallback la in-memory
                 if prev_attrs:
@@ -231,6 +242,10 @@ class ANMAlertSensor(Entity):
             )
             loaded = await self._load_from_cache()
             if loaded:
+                # Log și avertizările din cache
+                cache_avertizari = self._attributes.get("avertizari", [])
+                _LOGGER.warning("[DEBUG] avertizari din cache: %s", cache_avertizari)
+                _LOGGER.warning("[DEBUG] numar_avertizari (cache): %d", len(cache_avertizari))
                 return
             if prev_attrs:
                 self._state = prev_state
