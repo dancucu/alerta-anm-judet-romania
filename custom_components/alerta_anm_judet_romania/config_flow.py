@@ -55,15 +55,20 @@ class AlertaANMConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     @callback
     def async_get_options_flow(config_entry):
         """Obține options flow."""
-        return AlertaANMOptionsFlow(config_entry)
+        return AlertaANMOptionsFlow()
 
 
 class AlertaANMOptionsFlow(config_entries.OptionsFlow):
-    """Options flow pentru Alertă ANM."""
+    """Options flow pentru Alertă ANM.
 
-    def __init__(self, config_entry):
-        """Inițializare options flow."""
-        self.config_entry = config_entry
+    Do not set self.config_entry manually here: since Home Assistant Core
+    2024.12, OptionsFlow provides self.config_entry as a read-only property
+    that HA sets automatically. Assigning it in __init__ (the old pattern)
+    logs a deprecation warning from 2024.12 onward and raises
+    AttributeError: property 'config_entry' has no setter starting with
+    Home Assistant Core 2025.12, which breaks this integration's Options
+    dialog entirely on current HA versions.
+    """
 
     async def async_step_init(self, user_input=None):
         """Gestionare opțiuni."""
